@@ -1,0 +1,61 @@
+# Secrets / local config
+.env
+.env.*
+
+# Task scratch files
+*todo*.md
+
+# Codex / AI tooling
+.codex/
+.claude/
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+
+# Flutter / Dart tool state
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.metadata
+pubspec_overrides.yaml
+
+# Flutter / build outputs
+build/
+coverage/
+
+# Dart / Flutter generated or temporary
+*.log
+*.tmp
+*.temp
+
+# Android
+android/.gradle/
+android/captures/
+android/local.properties
+android/key.properties
+**/GeneratedPluginRegistrant.java
+
+# iOS / macOS
+ios/Flutter/.last_build_id
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/.symlinks/
+ios/Runner/GeneratedPluginRegistrant.*
+macos/Flutter/ephemeral/
+macos/Pods/
+macos/.symlinks/
+macos/Runner/GeneratedPluginRegistrant.swift
+
+# Linux / Windows generated plugin registrants
+linux/flutter/generated_plugin_registrant.*
+windows/flutter/generated_plugin_registrant.*
+
+# Misc OS noise
+.DS_Store
+Thumbs.db
+
+# Project-specific local docs / instructions
+AGENTS.md
