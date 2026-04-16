@@ -11,6 +11,7 @@ import 'application_config_danger_zone_page.dart';
 import 'application_config_general_page.dart';
 import 'application_config_git_page.dart';
 import 'application_config_healthchecks_page.dart';
+import 'application_config_webhooks_page.dart';
 import 'application_deployments_page.dart';
 import 'application_logs_page.dart';
 
@@ -39,6 +40,7 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
   static const _sectionOptions = <String>[
     'General',
     'Git',
+    'Webhooks',
     'Health Checks',
     'Advanced',
     'Danger Zone',
@@ -163,6 +165,11 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
         switch (_section) {
           case 'Git':
             return ApplicationConfigGitPage(
+              application: application,
+              onUpdated: _handleApplicationUpdated,
+            );
+          case 'Webhooks':
+            return ApplicationConfigWebhooksPage(
               application: application,
               onUpdated: _handleApplicationUpdated,
             );

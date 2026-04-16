@@ -506,6 +506,9 @@ class ApplicationConfigSchema {
     'git_full_url',
     'source_id',
     'github_app_uuid',
+  };
+
+  static const Set<String> _webhookKeys = {
     'manual_webhook_secret_github',
     'manual_webhook_secret_gitlab',
     'manual_webhook_secret_bitbucket',
@@ -579,6 +582,7 @@ class ApplicationConfigSchema {
           .where(
             (field) =>
                 !_gitKeys.contains(field.key) &&
+                !_webhookKeys.contains(field.key) &&
                 !_healthCheckKeys.contains(field.key) &&
                 !_advancedKeys.contains(field.key),
           )
@@ -586,6 +590,9 @@ class ApplicationConfigSchema {
 
   static List<ApplicationConfigFieldDefinition> get gitFields =>
       _filterByKeys(_gitKeys);
+
+  static List<ApplicationConfigFieldDefinition> get webhookFields =>
+      _filterByKeys(_webhookKeys);
 
   static List<ApplicationConfigFieldDefinition> get healthCheckFields =>
       _filterByKeys(_healthCheckKeys);

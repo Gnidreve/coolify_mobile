@@ -108,35 +108,35 @@ class _ProjectEnvironmentResourcesPageState
     );
 
     final page = switch (database.serviceType) {
-      'postgresql' => PostgreSqlDatabasePage(
+      'postgresql' => PostgreSqlDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'clickhouse' => ClickHouseDatabasePage(
+      'clickhouse' => ClickHouseDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'dragonfly' => DragonflyDatabasePage(
+      'dragonfly' => DragonflyDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'redis' => RedisDatabasePage(
+      'redis' => RedisDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'keydb' => KeyDbDatabasePage(
+      'keydb' => KeyDbDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'mariadb' => MariaDbDatabasePage(
+      'mariadb' => MariaDbDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'mysql' => MySqlDatabasePage(
+      'mysql' => MySqlDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'mongodb' => MongoDbDatabasePage(
+      'mongodb' => MongoDbDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
