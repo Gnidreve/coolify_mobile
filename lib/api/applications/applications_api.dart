@@ -172,4 +172,10 @@ class ApplicationResource {
   final String buildPack;
   final String updatedAt;
   final Map<String, dynamic> rawJson;
+
+  /// Asset name for icon lookup in lib/assets/applications/.
+  String get iconAssetName => switch (buildPack) {
+    'dockercompose' => 'docker_compose',
+    _ => buildPack,
+  };
 }

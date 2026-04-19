@@ -12,13 +12,18 @@ class ApplicationConfigSectionEditor extends StatefulWidget {
   const ApplicationConfigSectionEditor({
     super.key,
     required this.application,
-    required this.fields,
+    this.fields = const [],
+    this.groups = const [],
     this.onUpdated,
   });
 
   final ApplicationResource application;
   final List<ApplicationConfigFieldDefinition> fields;
+  final List<ApplicationConfigFieldGroup> groups;
   final ValueChanged<ApplicationResource>? onUpdated;
+
+  List<ApplicationConfigFieldDefinition> get _effectiveFields =>
+      groups.isNotEmpty ? groups.expand((g) => g.fields).toList() : fields;
 
   @override
   State<ApplicationConfigSectionEditor> createState() =>
@@ -30,6 +35,7 @@ class _ApplicationConfigSectionEditorState
   late ApplicationResource _application;
   late final Map<String, TextEditingController> _controllers;
   late final Map<String, bool> _boolValues;
+  late final Map<String, String?> _dropdownValues;
   bool _saving = false;
 
   @override
@@ -37,13 +43,18 @@ class _ApplicationConfigSectionEditorState
     super.initState();
     _application = widget.application;
     _controllers = {
-      for (final field in widget.fields)
-        if (field.type != ApplicationConfigFieldType.boolean)
+      for (final field in widget._effectiveFields)
+        if (field.type != ApplicationConfigFieldType.boolean &&
+            field.type != ApplicationConfigFieldType.dropdown)
           field.key: TextEditingController(),
     };
     _boolValues = {
-      for (final field in widget.fields)
+      for (final field in widget._effectiveFields)
         if (field.type == ApplicationConfigFieldType.boolean) field.key: false,
+    };
+    _dropdownValues = {
+      for (final field in widget._effectiveFields)
+        if (field.type == ApplicationConfigFieldType.dropdown) field.key: null,
     };
     _seedFromApplication(_application);
   }
@@ -70,13 +81,19 @@ class _ApplicationConfigSectionEditorState
     final raw = application.rawJson;
     final patchDefaults = ApplicationConfigSchema.patchOnlyDefaults(raw);
 
-    for (final field in widget.fields) {
+    for (final field in widget._effectiveFields) {
       if (field.type == ApplicationConfigFieldType.boolean) {
         _boolValues[field.key] = ApplicationConfigSchema.readBool(
           field,
           raw,
           patchDefaults,
         );
+        continue;
+      }
+
+      if (field.type == ApplicationConfigFieldType.dropdown) {
+        final value = ApplicationConfigSchema.readText(field, raw, patchDefaults);
+        _dropdownValues[field.key] = value.isEmpty ? null : value;
         continue;
       }
 
@@ -96,7 +113,7 @@ class _ApplicationConfigSectionEditorState
     try {
       final body = <String, dynamic>{};
 
-      for (final field in widget.fields.where((field) => field.editable)) {
+      for (final field in widget._effectiveFields.where((field) => field.editable)) {
         switch (field.type) {
           case ApplicationConfigFieldType.boolean:
             body[field.key] = _boolValues[field.key] ?? false;
@@ -107,6 +124,9 @@ class _ApplicationConfigSectionEditorState
             break;
           case ApplicationConfigFieldType.jsonArray:
             body[field.key] = _parseJsonArray(_controllers[field.key]!.text);
+            break;
+          case ApplicationConfigFieldType.dropdown:
+            body[field.key] = _dropdownValues[field.key] ?? '';
             break;
           case ApplicationConfigFieldType.text:
           case ApplicationConfigFieldType.multiline:
@@ -158,42 +178,73 @@ class _ApplicationConfigSectionEditorState
 
   @override
   Widget build(BuildContext context) {
-    final visibleFields = widget.fields
+    final allVisible = widget._effectiveFields
         .where((f) => f.editable && !f.hidden)
-        .toList();
+        .toSet();
 
-    if (visibleFields.isEmpty) {
+    if (allVisible.isEmpty) {
       return Text(
         'No configurable fields in this section.',
         style: ShadTheme.of(context).textTheme.muted,
       );
     }
 
-    final hasEditableFields = visibleFields.any((field) => field.editable);
+    final children = <Widget>[];
+
+    if (widget.groups.isNotEmpty) {
+      for (var i = 0; i < widget.groups.length; i++) {
+        final group = widget.groups[i];
+        final groupFields = group.fields.where((f) => allVisible.contains(f)).toList();
+        if (groupFields.isEmpty) continue;
+
+        if (i > 0) {
+          children.add(const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(),
+          ));
+        }
+        if (group.title != null) {
+          children.add(Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              group.title!,
+              style: ShadTheme.of(context).textTheme.h4,
+            ),
+          ));
+        }
+        for (final field in groupFields) {
+          children.add(Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildField(field),
+          ));
+        }
+      }
+    } else {
+      for (final field in allVisible) {
+        children.add(Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _buildField(field),
+        ));
+      }
+    }
+
+    children.addAll([
+      const SizedBox(height: 8),
+      ShadButton(
+        onPressed: _saving ? null : _save,
+        child: _saving
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Save'),
+      ),
+    ]);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ...visibleFields.map(
-          (field) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildField(field),
-          ),
-        ),
-        if (hasEditableFields) ...[
-          const SizedBox(height: 8),
-          ShadButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
-          ),
-        ],
-      ],
+      children: children,
     );
   }
 
@@ -207,6 +258,27 @@ class _ApplicationConfigSectionEditorState
               ? (value) => setState(() => _boolValues[field.key] = value)
               : null,
         ),
+      );
+    }
+
+    if (field.type == ApplicationConfigFieldType.dropdown) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(field.key, style: ShadTheme.of(context).textTheme.small),
+          const SizedBox(height: 6),
+          ShadSelect<String>(
+            initialValue: _dropdownValues[field.key],
+            enabled: field.editable,
+            onChanged: field.editable
+                ? (value) => setState(() => _dropdownValues[field.key] = value)
+                : null,
+            options: field.options
+                .map((opt) => ShadOption(value: opt, child: Text(opt)))
+                .toList(),
+            selectedOptionBuilder: (context, value) => Text(value),
+          ),
+        ],
       );
     }
 

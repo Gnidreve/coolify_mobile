@@ -210,6 +210,10 @@ class _ProjectEnvironmentResourcesPageState
                           subtitle: application.fqdn,
                           statusColor: resourceStatusColor(application.status),
                           showChevron: false,
+                          leading: ResourceCardAssetIcon(
+                            assetDirectory: 'lib/assets/applications',
+                            assetName: application.iconAssetName,
+                          ),
                           onTap: () => _openApplication(application),
                         ),
                       ),
@@ -229,6 +233,10 @@ class _ProjectEnvironmentResourcesPageState
                           tertiary: database.serviceType,
                           statusColor: resourceStatusColor(database.status),
                           showChevron: false,
+                          leading: ResourceCardAssetIcon(
+                            assetDirectory: 'lib/assets/databases',
+                            assetName: database.serviceType,
+                          ),
                           onTap: () => _openDatabase(database),
                         ),
                       ),

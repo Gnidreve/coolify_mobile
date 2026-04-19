@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-enum ApplicationConfigFieldType { text, multiline, integer, boolean, jsonArray }
+enum ApplicationConfigFieldType { text, multiline, integer, boolean, jsonArray, dropdown }
 
 class ApplicationConfigFieldDefinition {
   const ApplicationConfigFieldDefinition(
@@ -9,6 +9,7 @@ class ApplicationConfigFieldDefinition {
     this.editable = false,
     this.patchOnly = false,
     this.hidden = false,
+    this.options = const [],
   });
 
   final String key;
@@ -16,6 +17,17 @@ class ApplicationConfigFieldDefinition {
   final bool editable;
   final bool patchOnly;
   final bool hidden;
+  final List<String> options;
+}
+
+class ApplicationConfigFieldGroup {
+  const ApplicationConfigFieldGroup({
+    this.title,
+    required this.fields,
+  });
+
+  final String? title;
+  final List<ApplicationConfigFieldDefinition> fields;
 }
 
 class ApplicationConfigSchema {
@@ -74,8 +86,9 @@ class ApplicationConfigSchema {
     ),
     ApplicationConfigFieldDefinition(
       'build_pack',
-      ApplicationConfigFieldType.text,
+      ApplicationConfigFieldType.dropdown,
       editable: true,
+      options: ['nixpacks', 'static', 'dockerfile', 'dockercompose'],
     ),
     ApplicationConfigFieldDefinition(
       'static_image',
@@ -109,6 +122,7 @@ class ApplicationConfigSchema {
     ApplicationConfigFieldDefinition(
       'custom_network_aliases',
       ApplicationConfigFieldType.text,
+      editable: true,
     ),
     ApplicationConfigFieldDefinition(
       'base_directory',
@@ -142,8 +156,9 @@ class ApplicationConfigSchema {
     ),
     ApplicationConfigFieldDefinition(
       'health_check_method',
-      ApplicationConfigFieldType.text,
+      ApplicationConfigFieldType.dropdown,
       editable: true,
+      options: ['GET', 'POST'],
     ),
     ApplicationConfigFieldDefinition(
       'health_check_return_code',
@@ -152,8 +167,9 @@ class ApplicationConfigSchema {
     ),
     ApplicationConfigFieldDefinition(
       'health_check_scheme',
-      ApplicationConfigFieldType.text,
+      ApplicationConfigFieldType.dropdown,
       editable: true,
+      options: ['http', 'https'],
     ),
     ApplicationConfigFieldDefinition(
       'health_check_response_text',
@@ -266,6 +282,7 @@ class ApplicationConfigSchema {
     ApplicationConfigFieldDefinition(
       'dockerfile_target_build',
       ApplicationConfigFieldType.text,
+      editable: true,
     ),
     ApplicationConfigFieldDefinition(
       'manual_webhook_secret_github',
@@ -537,17 +554,34 @@ class ApplicationConfigSchema {
     'limits_cpu_shares',
   };
 
-  static const Set<String> _advancedKeys = {
+  // Keys that belong to the General tab groups (excluded from Advanced).
+  static const Set<String> _generalGroupKeys = {
+    'name',
+    'description',
     'build_pack',
+    'domains',
+    'redirect',
     'docker_registry_image_name',
     'docker_registry_image_tag',
-    'static_image',
+    'base_directory',
+    'publish_directory',
+    'dockerfile_location',
+    'dockerfile_target_build',
+    'custom_docker_run_options',
+    'use_build_server',
+    'install_command',
+    'build_command',
+    'start_command',
+    'ports_exposes',
+    'ports_mappings',
     'custom_network_aliases',
+  };
+
+  static const Set<String> _advancedKeys = {
+    'static_image',
     'preview_url_template',
     'dockerfile',
-    'dockerfile_location',
     'custom_labels',
-    'dockerfile_target_build',
     'docker_compose_location',
     'docker_compose',
     'docker_compose_raw',
@@ -556,25 +590,21 @@ class ApplicationConfigSchema {
     'docker_compose_custom_build_command',
     'swarm_replicas',
     'swarm_placement_constraints',
-    'custom_docker_run_options',
     'post_deployment_command',
     'post_deployment_command_container',
     'pre_deployment_command',
     'pre_deployment_command_container',
     'watch_paths',
-    'redirect',
     'compose_parsing_version',
     'custom_nginx_configuration',
     'is_http_basic_auth_enabled',
     'http_basic_auth_username',
     'http_basic_auth_password',
-    'domains',
     'is_static',
     'is_spa',
     'is_auto_deploy_enabled',
     'is_force_https_enabled',
     'instant_deploy',
-    'use_build_server',
     'connect_to_docker_network',
     'force_domain_override',
     'is_container_label_escape_enabled',
@@ -589,9 +619,43 @@ class ApplicationConfigSchema {
                 !_webhookKeys.contains(field.key) &&
                 !_healthCheckKeys.contains(field.key) &&
                 !_advancedKeys.contains(field.key) &&
-                !_limitsKeys.contains(field.key),
+                !_limitsKeys.contains(field.key) &&
+                !_generalGroupKeys.contains(field.key),
           )
           .toList();
+
+  static ApplicationConfigFieldDefinition _def(String key) =>
+      allDefinitions.firstWhere((f) => f.key == key);
+
+  static List<ApplicationConfigFieldGroup> get generalGroups => [
+    ApplicationConfigFieldGroup(fields: [
+      _def('name'),
+      _def('description'),
+      _def('build_pack'),
+      _def('domains'),
+      _def('redirect'),
+    ]),
+    ApplicationConfigFieldGroup(title: 'Docker Registry', fields: [
+      _def('docker_registry_image_name'),
+      _def('docker_registry_image_tag'),
+    ]),
+    ApplicationConfigFieldGroup(title: 'Build', fields: [
+      _def('base_directory'),
+      _def('publish_directory'),
+      _def('dockerfile_location'),
+      _def('dockerfile_target_build'),
+      _def('custom_docker_run_options'),
+      _def('install_command'),
+      _def('build_command'),
+      _def('start_command'),
+      _def('use_build_server'),
+    ]),
+    ApplicationConfigFieldGroup(title: 'Network', fields: [
+      _def('ports_exposes'),
+      _def('ports_mappings'),
+      _def('custom_network_aliases'),
+    ]),
+  ];
 
   static List<ApplicationConfigFieldDefinition> get limitsFields =>
       _filterByKeys(_limitsKeys);

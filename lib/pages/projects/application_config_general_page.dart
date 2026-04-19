@@ -18,7 +18,7 @@ class ApplicationConfigGeneralPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ApplicationConfigSectionEditor(
       application: application,
-      fields: ApplicationConfigSchema.generalFields,
+      groups: ApplicationConfigSchema.generalGroups,
       onUpdated: onUpdated,
     );
   }

@@ -48,6 +48,9 @@ ShadThemeData buildLightTheme() {
     selectTheme: ShadSelectTheme(
       decoration: _surfaceDecoration(_lightSurface, _lightBorder),
     ),
+    optionTheme: const ShadOptionTheme(
+      orderPolicy: ReverseWidgetOrderPolicy(),
+    ),
     textTheme: ShadTextTheme(family: _fontSans),
   );
 }

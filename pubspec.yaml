@@ -35,6 +35,8 @@ flutter:
   assets:
     - .env
     - lib/assets/
+    - lib/assets/applications/
+    - lib/assets/databases/
   fonts:
     - family: Geist Sans
       fonts:
