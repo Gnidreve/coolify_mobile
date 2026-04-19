@@ -1,6 +1,7 @@
 import 'applications/index.dart';
 import 'databases/index.dart';
 import 'deployments/index.dart';
+import 'github_apps/index.dart';
 import 'health/index.dart';
 import 'projects/index.dart';
 import 'security/index.dart';
@@ -9,6 +10,7 @@ import 'servers/index.dart';
 export 'applications/index.dart';
 export 'databases/index.dart';
 export 'deployments/index.dart';
+export 'github_apps/index.dart';
 export 'health/index.dart';
 export 'projects/index.dart';
 export 'security/index.dart';
@@ -27,6 +29,7 @@ class CoolifyApi {
     : applications = ApplicationsApi(baseUrl: baseUrl, apiToken: apiToken),
       databases = DatabasesApi(baseUrl: baseUrl, apiToken: apiToken),
       health = HealthApi(baseUrl: baseUrl, apiToken: apiToken),
+      githubApps = GithubAppsApi(baseUrl: baseUrl, apiToken: apiToken),
       projects = ProjectsApi(baseUrl: baseUrl, apiToken: apiToken),
       security = SecurityApi(baseUrl: baseUrl, apiToken: apiToken),
       servers = ServersApi(baseUrl: baseUrl, apiToken: apiToken),
@@ -38,6 +41,7 @@ class CoolifyApi {
   final ApplicationsApi applications;
   final DatabasesApi databases;
   final HealthApi health;
+  final GithubAppsApi githubApps;
   final ProjectsApi projects;
   final SecurityApi security;
   final ServersApi servers;

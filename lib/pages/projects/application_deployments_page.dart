@@ -5,14 +5,19 @@ import '../../api/coolify_api.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
 import '../../core/utils/resource_status.dart';
-import '../../core/widgets/resource_card.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/resource_card.dart';
+import '../../components/state_views.dart';
 import 'application_deployment_details_page.dart';
 
 class ApplicationDeploymentsPage extends StatefulWidget {
-  const ApplicationDeploymentsPage({super.key, required this.application});
+  const ApplicationDeploymentsPage({
+    super.key,
+    required this.application,
+    this.parentCrumbs = const [],
+  });
 
   final ApplicationResource application;
+  final List<String> parentCrumbs;
 
   @override
   State<ApplicationDeploymentsPage> createState() =>
@@ -62,6 +67,7 @@ class _ApplicationDeploymentsPageState
       MaterialPageRoute(
         builder: (_) => ApplicationDeploymentDetailsPage(
           deploymentUuid: deployment.deploymentUuid,
+          parentCrumbs: [...widget.parentCrumbs, 'Deployment'],
         ),
       ),
     );

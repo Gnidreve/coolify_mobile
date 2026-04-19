@@ -2,20 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
-import '../../core/widgets/resource_card.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/resource_card.dart';
+import '../../components/state_views.dart';
+import 'create_project_page.dart';
 import 'environment_resources_page.dart';
 
 class ProjectsPage extends StatefulWidget {
   const ProjectsPage({super.key});
 
   @override
-  State<ProjectsPage> createState() => _ProjectsPageState();
+  State<ProjectsPage> createState() => ProjectsPageState();
 }
 
-class _ProjectsPageState extends State<ProjectsPage> {
+class ProjectsPageState extends State<ProjectsPage> {
   bool _loading = true;
   String? _error;
   List<ProjectSummary> _projects = const [];
@@ -56,18 +59,19 @@ class _ProjectsPageState extends State<ProjectsPage> {
       final environments = await api.projects.listEnvironments(project.uuid);
       if (!mounted) return;
 
-      if (environments.length == 1) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ProjectEnvironmentResourcesPage(
-              projectName: project.name,
-              projectUuid: project.uuid,
-              environment: environments.first,
-            ),
-          ),
-        );
-        return;
-      }
+      // temporarily disabled: auto-skip to single environment on project tap
+      // if (environments.length == 1) {
+      //   await Navigator.of(context).push(
+      //     MaterialPageRoute(
+      //       builder: (_) => ProjectEnvironmentResourcesPage(
+      //         projectName: project.name,
+      //         projectUuid: project.uuid,
+      //         environment: environments.first,
+      //       ),
+      //     ),
+      //   );
+      //   return;
+      // }
 
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -87,12 +91,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
     }
   }
 
-  void _showAddInfo() {
-    AppToast.info(
-      context,
-      'Project creation is not connected yet.',
-      title: 'Coming soon',
+  void openAdd() => _openCreateProject();
+
+  Future<void> _openCreateProject() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const CreateProjectPage()),
     );
+    if (created == true) _load();
   }
 
   @override
@@ -108,21 +113,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Projects',
-                style: ShadTheme.of(context).textTheme.h4,
-              ),
-            ),
-            ShadButton.outline(
-              onPressed: _showAddInfo,
-              child: const Text('+ Add'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         ..._projects.map(
           (project) => Padding(
             padding: const EdgeInsets.only(bottom: 14),
@@ -157,6 +147,7 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
   String? _error;
   late List<ProjectEnvironment> _environments =
       widget.initialEnvironments ?? const [];
+  bool _creatingEnvironment = false;
 
   @override
   void initState() {
@@ -204,10 +195,115 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
     );
   }
 
+  Future<void> _openCreateEnvironmentDialog() async {
+    final controller = TextEditingController();
+    String? validationError;
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> save() async {
+              final name = controller.text.trim();
+              if (name.isEmpty) {
+                setDialogState(() => validationError = 'Name is required.');
+                return;
+              }
+
+              setDialogState(() => validationError = null);
+              setState(() => _creatingEnvironment = true);
+
+              try {
+                final api = await CoolifyClientService.createClient();
+                await api.projects.createEnvironment(
+                  projectUuid: widget.project.uuid,
+                  name: name,
+                );
+                if (!mounted || !dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop(true);
+                AppToast.success(context, 'Environment created.');
+              } catch (error) {
+                if (!mounted) return;
+                AppToast.error(
+                  context,
+                  error.toString(),
+                  title: 'Could not create environment',
+                );
+              } finally {
+                if (mounted) {
+                  setState(() => _creatingEnvironment = false);
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Add Environment'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ShadInput(
+                      controller: controller,
+                      autofocus: true,
+                      placeholder: const Text('Name'),
+                      enabled: !_creatingEnvironment,
+                      onSubmitted: (_) => save(),
+                    ),
+                    if (validationError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                ShadButton.outline(
+                  onPressed: _creatingEnvironment
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ShadButton(
+                  onPressed: _creatingEnvironment ? null : save,
+                  child: Text(_creatingEnvironment ? 'Saving...' : 'Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (created == true) {
+      await _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.project.name)),
+      drawer: const AppSidebarDrawer(),
+      appBar: AppPageHeader(
+        crumbs: ['Projects', widget.project.name],
+        actions: [
+          IconButton(
+            onPressed: _creatingEnvironment ? null : _openCreateEnvironmentDialog,
+            icon: const Icon(LucideIcons.plus),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
         top: false,
         child: _loading

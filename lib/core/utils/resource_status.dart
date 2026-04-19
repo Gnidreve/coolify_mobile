@@ -63,6 +63,7 @@ bool _isHealthyToken(String token) {
     'online',
     'healthy',
     'success',
+    'finished',
     'ready',
     'completed',
   }.contains(token);

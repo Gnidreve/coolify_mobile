@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../components/application_action_menu_button.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/state_views.dart';
 import 'application_config_advanced_page.dart';
+import 'application_config_limits_page.dart';
 import 'application_config_danger_zone_page.dart';
 import 'application_config_general_page.dart';
 import 'application_config_git_page.dart';
@@ -20,10 +23,13 @@ class ApplicationDetailsPage extends StatefulWidget {
     super.key,
     required this.applicationUuid,
     required this.fallbackTitle,
+    this.parentCrumbs = const [],
   });
 
   final String applicationUuid;
   final String fallbackTitle;
+  /// Breadcrumb labels for all ancestor pages, e.g. ['Projects', 'My Project', 'production'].
+  final List<String> parentCrumbs;
 
   @override
   State<ApplicationDetailsPage> createState() => _ApplicationDetailsPageState();
@@ -39,10 +45,11 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
   static const _topTabs = <String>['Config', 'Deployments', 'Logs'];
   static const _sectionOptions = <String>[
     'General',
+    'Advanced',
+    'Resource Limits',
     'Git',
     'Webhooks',
     'Health Checks',
-    'Advanced',
     'Danger Zone',
   ];
 
@@ -81,8 +88,9 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
     final application = _application;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(application?.name ?? widget.fallbackTitle),
+      drawer: const AppSidebarDrawer(),
+      appBar: AppPageHeader(
+        crumbs: [...widget.parentCrumbs, application?.name ?? widget.fallbackTitle],
         actions: application == null
             ? null
             : [
@@ -154,7 +162,10 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
   Widget _buildContent(ApplicationResource application) {
     switch (_topTab) {
       case 'Deployments':
-        return ApplicationDeploymentsPage(application: application);
+        return ApplicationDeploymentsPage(
+          application: application,
+          parentCrumbs: [...widget.parentCrumbs, application.name],
+        );
       case 'Logs':
         return ApplicationLogsPage(
           applicationUuid: application.uuid,
@@ -180,6 +191,11 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
             );
           case 'Advanced':
             return ApplicationConfigAdvancedPage(
+              application: application,
+              onUpdated: _handleApplicationUpdated,
+            );
+          case 'Resource Limits':
+            return ApplicationConfigLimitsPage(
               application: application,
               onUpdated: _handleApplicationUpdated,
             );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import '../../api/coolify_api.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/credentials_service.dart';
@@ -19,6 +21,15 @@ class _LoginPageState extends State<LoginPage> {
   final _urlController = TextEditingController();
   final _tokenController = TextEditingController();
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final envUrl = normalizeBaseUrl(dotenv.env['COOLIFY_BASE_URL']);
+    final envToken = normalizeApiToken(dotenv.env['COOLIFY_AUTH_TOKEN']);
+    if (envUrl != null && envUrl.isNotEmpty) _urlController.text = envUrl;
+    if (envToken != null && envToken.isNotEmpty) _tokenController.text = envToken;
+  }
 
   @override
   void dispose() {

@@ -1,44 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
+import '../../core/services/app_shell_service.dart';
 import '../deployments/index.dart';
+import '../keys_tokens/index.dart';
 import '../projects/index.dart';
 import '../servers/index.dart';
-import '../keys_tokens/index.dart';
 import '../teams/index.dart';
 import '../settings/index.dart';
-
-enum _SidebarItem {
-  dashboard,
-  projects,
-  servers,
-  keysTokens,
-  deployments,
-  teams,
-  settings,
-}
-
-extension _SidebarItemX on _SidebarItem {
-  String get label => switch (this) {
-    _SidebarItem.dashboard => 'Dashboard',
-    _SidebarItem.projects => 'Projects',
-    _SidebarItem.servers => 'Servers',
-    _SidebarItem.keysTokens => 'Keys & Tokens',
-    _SidebarItem.deployments => 'Deployments',
-    _SidebarItem.teams => 'Teams',
-    _SidebarItem.settings => 'Settings',
-  };
-
-  IconData get icon => switch (this) {
-    _SidebarItem.dashboard => LucideIcons.layoutDashboard,
-    _SidebarItem.projects => LucideIcons.folder,
-    _SidebarItem.servers => LucideIcons.server,
-    _SidebarItem.keysTokens => LucideIcons.key,
-    _SidebarItem.deployments => LucideIcons.rocket,
-    _SidebarItem.teams => LucideIcons.users,
-    _SidebarItem.settings => LucideIcons.settings,
-  };
-}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.onThemeModeChanged});
@@ -50,22 +21,39 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  _SidebarItem _active = _SidebarItem.dashboard;
+  late AppSidebarItem _active = AppShellService.instance.activeItem;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _keysTokensKey = GlobalKey<KeysTokensPageState>();
+  final _serversKey = GlobalKey<ServersPageState>();
+  final _projectsKey = GlobalKey<ProjectsPageState>();
 
-  void _navigate(_SidebarItem item) {
-    setState(() => _active = item);
-    _scaffoldKey.currentState?.closeEndDrawer();
+  @override
+  void initState() {
+    super.initState();
+    AppShellService.instance.activeItemListenable.addListener(_handleActiveItem);
+  }
+
+  @override
+  void dispose() {
+    AppShellService.instance.activeItemListenable.removeListener(
+      _handleActiveItem,
+    );
+    super.dispose();
+  }
+
+  void _handleActiveItem() {
+    if (!mounted) return;
+    setState(() => _active = AppShellService.instance.activeItem);
   }
 
   Widget _buildBody() => switch (_active) {
-    _SidebarItem.dashboard => const _DashboardView(),
-    _SidebarItem.projects => const ProjectsPage(),
-    _SidebarItem.servers => const ServersPage(),
-    _SidebarItem.keysTokens => const KeysTokensPage(),
-    _SidebarItem.deployments => const DeploymentsPage(),
-    _SidebarItem.teams => const TeamsPage(),
-    _SidebarItem.settings => SettingsPage(
+    AppSidebarItem.dashboard => const _DashboardView(),
+    AppSidebarItem.projects => ProjectsPage(key: _projectsKey),
+    AppSidebarItem.servers => ServersPage(key: _serversKey),
+    AppSidebarItem.keysTokens => KeysTokensPage(key: _keysTokensKey),
+    AppSidebarItem.deployments => const DeploymentsPage(),
+    AppSidebarItem.teams => const TeamsPage(),
+    AppSidebarItem.settings => SettingsPage(
       onThemeModeChanged: widget.onThemeModeChanged,
     ),
   };
@@ -74,99 +62,36 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      appBar: AppBar(
-        titleSpacing: 20,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SvgPicture.asset(
-              'lib/assets/coolify-logo.svg',
-              width: 22,
-              height: 22,
+      appBar: AppPageHeader(
+        crumbs: [_active.label],
+        onLeadingPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        actions: switch (_active) {
+          AppSidebarItem.keysTokens => [
+            IconButton(
+              icon: const Icon(LucideIcons.plus),
+              tooltip: 'Add private key',
+              onPressed: () => _keysTokensKey.currentState?.openAdd(),
             ),
-            const SizedBox(width: 10),
-            Text('Coolify Mobile', style: ShadTheme.of(context).textTheme.h4),
           ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.menu),
-            onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-          ),
-          const SizedBox(width: 8),
-        ],
+          AppSidebarItem.servers => [
+            IconButton(
+              icon: const Icon(LucideIcons.plus),
+              tooltip: 'Add server',
+              onPressed: () => _serversKey.currentState?.openAdd(),
+            ),
+          ],
+          AppSidebarItem.projects => [
+            IconButton(
+              icon: const Icon(LucideIcons.plus),
+              tooltip: 'Add project',
+              onPressed: () => _projectsKey.currentState?.openAdd(),
+            ),
+          ],
+          _ => null,
+        },
       ),
-      endDrawer: _AppDrawer(active: _active, onNavigate: _navigate),
+      drawer: const AppSidebarDrawer(),
       body: SafeArea(top: false, child: _buildBody()),
-    );
-  }
-}
-
-class _AppDrawer extends StatelessWidget {
-  const _AppDrawer({required this.active, required this.onNavigate});
-
-  final _SidebarItem active;
-  final ValueChanged<_SidebarItem> onNavigate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      width: 248,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  SvgPicture.asset(
-                    'lib/assets/coolify-logo.svg',
-                    width: 28,
-                    height: 28,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Coolify Mobile',
-                      style: ShadTheme.of(context).textTheme.h4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: _SidebarItem.values.map((item) {
-                  final isActive = item == active;
-                  final primary = ShadTheme.of(context).colorScheme.primary;
-                  return ListTile(
-                    leading: Icon(item.icon),
-                    title: Text(
-                      item.label,
-                      style: isActive
-                          ? TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: primary,
-                            )
-                          : null,
-                    ),
-                    iconColor: isActive ? primary : null,
-                    selected: isActive,
-                    onTap: () => onNavigate(item),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -17,12 +17,9 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-enum _SettingsTab { app, connection }
-
 class _SettingsPageState extends State<SettingsPage> {
   final _urlController = TextEditingController();
   final _tokenController = TextEditingController();
-  _SettingsTab _tab = _SettingsTab.app;
   bool _tokenVisible = false;
   bool _loaded = false;
   bool _testing = false;
@@ -198,107 +195,93 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        ShadTabs<_SettingsTab>(
-          value: _tab,
-          onChanged: (value) => setState(() => _tab = value),
-          tabs: [
-            ShadTab(
-              value: _SettingsTab.app,
-              content: const SizedBox.shrink(),
-              child: const Text('App'),
-            ),
-            ShadTab(
-              value: _SettingsTab.connection,
-              content: const SizedBox.shrink(),
-              child: const Text('Connection'),
-            ),
-          ],
+        Text('Connection', style: theme.textTheme.h4),
+        const SizedBox(height: 16),
+        ShadInputFormField(
+          id: 'base_url',
+          controller: _urlController,
+          label: const Text('Instance URL'),
+          placeholder: const Text('https://coolify.example.com'),
+          keyboardType: TextInputType.url,
+          autocorrect: false,
         ),
-        const SizedBox(height: 20),
-        if (_tab == _SettingsTab.app) ...[
-          Text('Appearance', style: theme.textTheme.h4),
-          const SizedBox(height: 16),
-          _LabeledSelect<ThemeMode>(
-            label: 'Theme',
-            value: _themeMode,
-            options: const [
-              ShadOption(value: ThemeMode.system, child: Text('System')),
-              ShadOption(value: ThemeMode.light, child: Text('Light')),
-              ShadOption(value: ThemeMode.dark, child: Text('Dark')),
-            ],
-            onChanged: (mode) {
-              if (mode == null) return;
-              widget.onThemeModeChanged(mode);
-              PreferencesService.instance.setThemeMode(mode);
-              setState(() {});
-            },
-            selectedOptionBuilder: (context, value) => Text(switch (value) {
-              ThemeMode.light => 'Light',
-              ThemeMode.dark => 'Dark',
-              ThemeMode.system => 'System',
-            }),
+        const SizedBox(height: 12),
+        ShadInputFormField(
+          id: 'api_token',
+          controller: _tokenController,
+          label: const Text('API Token'),
+          obscureText: !_tokenVisible,
+          trailing: ShadButton.ghost(
+            size: ShadButtonSize.sm,
+            onPressed: () => setState(() => _tokenVisible = !_tokenVisible),
+            child: Icon(
+              _tokenVisible ? LucideIcons.eyeOff : LucideIcons.eye,
+              size: 16,
+            ),
           ),
-          const SizedBox(height: 24),
-          Text('Notifications', style: theme.textTheme.h4),
-          const SizedBox(height: 16),
-          ShadButton(
-            onPressed: _notificationsBusy ? null : _allowNotifications,
-            child: _notificationsBusy
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Allow Notifications'),
-          ),
-        ] else ...[
-          Text('Connection', style: theme.textTheme.h4),
-          const SizedBox(height: 16),
-          ShadInputFormField(
-            id: 'base_url',
-            controller: _urlController,
-            label: const Text('Instance URL'),
-            placeholder: const Text('https://coolify.example.com'),
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-          ),
-          const SizedBox(height: 12),
-          ShadInputFormField(
-            id: 'api_token',
-            controller: _tokenController,
-            label: const Text('API Token'),
-            obscureText: !_tokenVisible,
-            trailing: ShadButton.ghost(
-              size: ShadButtonSize.sm,
-              onPressed: () => setState(() => _tokenVisible = !_tokenVisible),
-              child: Icon(
-                _tokenVisible ? LucideIcons.eyeOff : LucideIcons.eye,
-                size: 16,
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            ShadButton.outline(
+              onPressed: _testing ? null : _testConnection,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_testing)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    const Icon(LucideIcons.plugZap, size: 14),
+                  const SizedBox(width: 8),
+                  const Text('Test Connection'),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          ShadButton.outline(
-            onPressed: _testing ? null : _testConnection,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_testing)
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  const Icon(LucideIcons.plugZap, size: 14),
-                const SizedBox(width: 8),
-                const Text('Test Connection'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          ShadButton(onPressed: _save, child: const Text('Save')),
-        ],
+            ShadButton(onPressed: _save, child: const Text('Save')),
+          ],
+        ),
+        const SizedBox(height: 32),
+        Text('Appearance', style: theme.textTheme.h4),
+        const SizedBox(height: 16),
+        _LabeledSelect<ThemeMode>(
+          label: 'Theme',
+          value: _themeMode,
+          options: const [
+            ShadOption(value: ThemeMode.system, child: Text('System')),
+            ShadOption(value: ThemeMode.light, child: Text('Light')),
+            ShadOption(value: ThemeMode.dark, child: Text('Dark')),
+          ],
+          onChanged: (mode) {
+            if (mode == null) return;
+            widget.onThemeModeChanged(mode);
+            PreferencesService.instance.setThemeMode(mode);
+            setState(() {});
+          },
+          selectedOptionBuilder: (context, value) => Text(switch (value) {
+            ThemeMode.light => 'Light',
+            ThemeMode.dark => 'Dark',
+            ThemeMode.system => 'System',
+          }),
+        ),
+        const SizedBox(height: 32),
+        Text('Notifications', style: theme.textTheme.h4),
+        const SizedBox(height: 16),
+        ShadButton(
+          onPressed: _notificationsBusy ? null : _allowNotifications,
+          child: _notificationsBusy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Allow Notifications'),
+        ),
       ],
     );
   }

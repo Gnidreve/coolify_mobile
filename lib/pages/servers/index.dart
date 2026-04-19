@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
-import '../../core/widgets/resource_card.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/resource_card.dart';
+import '../../components/state_views.dart';
 
 class ServersPage extends StatefulWidget {
   const ServersPage({super.key});
 
   @override
-  State<ServersPage> createState() => _ServersPageState();
+  State<ServersPage> createState() => ServersPageState();
 }
 
-class _ServersPageState extends State<ServersPage> {
+class ServersPageState extends State<ServersPage> {
   bool _loading = true;
   String? _error;
   List<ServerResource> _servers = const [];
@@ -58,6 +60,8 @@ class _ServersPageState extends State<ServersPage> {
     }
   }
 
+  void openAdd() => _openCreate();
+
   Future<void> _openCreate() async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const _ServerEditorPage()),
@@ -77,18 +81,6 @@ class _ServersPageState extends State<ServersPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text('Servers', style: ShadTheme.of(context).textTheme.h4),
-            ),
-            ShadButton.outline(
-              onPressed: _openCreate,
-              child: const Text('+ Add'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         if (_servers.isEmpty)
           const SizedBox(
             height: 240,
@@ -110,9 +102,7 @@ class _ServersPageState extends State<ServersPage> {
   }
 }
 
-enum _ServerEditorTab { configuration, proxy }
-
-enum _ConfigurationMode { general, advanced }
+enum _ServerSection { general, advanced, privateKey, proxy }
 
 class _ServerEditorPage extends StatefulWidget {
   const _ServerEditorPage({this.uuid});
@@ -142,10 +132,14 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
   bool _loading = true;
   bool _saving = false;
   bool _isBuildServer = false;
-  _ServerEditorTab _tab = _ServerEditorTab.configuration;
-  _ConfigurationMode _configurationMode = _ConfigurationMode.general;
+  _ServerSection _section = _ServerSection.general;
   String? _error;
   Map<String, dynamic> _initial = const {};
+
+  // Private Keys section
+  List<PrivateKeyResource> _privateKeys = const [];
+  bool _loadingKeys = false;
+  String? _keysError;
 
   bool get _isDirty =>
       _nameController.text.trim() != (_initial['name'] ?? '') ||
@@ -354,6 +348,9 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
     TextEditingController controller, {
     TextInputType? keyboardType,
     bool enabled = true,
+    int minLines = 1,
+    int maxLines = 1,
+    String? infoDescription,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -363,82 +360,76 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
         label: Text(label),
         keyboardType: keyboardType,
         enabled: enabled,
+        minLines: minLines,
+        maxLines: maxLines,
+        trailing: infoDescription == null
+            ? null
+            : _FieldInfoPopover(
+                title: label,
+                description: infoDescription,
+              ),
       ),
     );
   }
 
-  Widget _buildConfigurationTab() {
-    final showAdvanced = _configurationMode == _ConfigurationMode.advanced;
+  Future<void> _loadPrivateKeys() async {
+    if (_loadingKeys) return;
+    setState(() {
+      _loadingKeys = true;
+      _keysError = null;
+    });
+    try {
+      final api = await CoolifyClientService.createClient();
+      final keys = await api.security.keys.list();
+      if (!mounted) return;
+      setState(() => _privateKeys = keys);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _keysError = error.toString());
+    } finally {
+      if (mounted) setState(() => _loadingKeys = false);
+    }
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _LabeledSelect<_ConfigurationMode>(
-          label: 'Section',
-          value: _configurationMode,
-          options: const [
-            ShadOption(
-              value: _ConfigurationMode.general,
-              child: Text('General'),
-            ),
-            ShadOption(
-              value: _ConfigurationMode.advanced,
-              child: Text('Advanced'),
-            ),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _configurationMode = value);
-          },
-          selectedOptionBuilder: (context, value) => Text(
-            value == _ConfigurationMode.general ? 'General' : 'Advanced',
-          ),
-        ),
-        const SizedBox(height: 16),
-        _field('name', 'Name', _nameController),
-        _field('description', 'Description', _descriptionController),
-        _field('ip', 'IP', _ipController),
-        _field(
-          'port',
-          'Port',
-          _portController,
-          keyboardType: TextInputType.number,
-        ),
-        _field('user', 'User', _userController),
-        if (showAdvanced) ...[
+  Widget _buildSection() {
+    return switch (_section) {
+      _ServerSection.general => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _field('name', 'Name', _nameController),
           _field(
-            'private_key_uuid',
-            'Private Key UUID',
-            _privateKeyUuidController,
+            'description',
+            'Description',
+            _descriptionController,
+            keyboardType: TextInputType.multiline,
+            minLines: 3,
+            maxLines: 6,
           ),
-          _field(
-            'concurrent_builds',
-            'Concurrent Builds',
-            _concurrentBuildsController,
-            keyboardType: TextInputType.number,
-          ),
-          _field(
-            'dynamic_timeout',
-            'Dynamic Timeout',
-            _dynamicTimeoutController,
-            keyboardType: TextInputType.number,
-          ),
-          _field(
-            'deployment_queue_limit',
-            'Deployment Queue Limit',
-            _deploymentQueueLimitController,
-            keyboardType: TextInputType.number,
-          ),
+          _field('ip', 'IP', _ipController),
+          _field('port', 'Port', _portController, keyboardType: TextInputType.number),
+          _field('user', 'User', _userController),
+        ],
+      ),
+      _ServerSection.advanced => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _field('concurrent_builds', 'Concurrent Builds', _concurrentBuildsController, keyboardType: TextInputType.number),
+          _field('dynamic_timeout', 'Dynamic Timeout', _dynamicTimeoutController, keyboardType: TextInputType.number),
+          _field('deployment_queue_limit', 'Deployment Queue Limit', _deploymentQueueLimitController, keyboardType: TextInputType.number),
           _field(
             'server_disk_usage_notification_threshold',
-            'Disk Usage Notification Threshold',
+            'Server disk usage notification threshold (%)',
             _diskThresholdController,
             keyboardType: TextInputType.number,
+            infoDescription:
+                'If the server disk usage exceeds this threshold, Coolify will send a notification to the team members.',
           ),
           _field(
             'server_disk_usage_check_frequency',
-            'Disk Usage Check Frequency',
+            'Disk usage check frequency',
             _diskCheckFrequencyController,
+            infoDescription:
+                'Cron expression for disk usage check frequency.\nYou can use every_minute, hourly, daily, weekly, monthly, yearly.\n\nDefault is every night at 11:00 PM.',
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -447,33 +438,110 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
             onChanged: (value) => setState(() => _isBuildServer = value),
           ),
         ],
-      ],
-    );
+      ),
+      _ServerSection.proxy => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _field('proxy_type', 'Proxy Type', _proxyTypeController),
+        ],
+      ),
+      _ServerSection.privateKey => _buildPrivateKeySection(),
+    };
   }
 
-  Widget _buildProxyTab() {
+  Widget _buildPrivateKeySection() {
+    final theme = ShadTheme.of(context);
+    final activeUuid = _privateKeyUuidController.text.trim();
+
+    if (_loadingKeys) return const LoadingStateView();
+
+    if (_keysError != null) {
+      return ErrorStateView(
+        message: _keysError!,
+        onRetry: _loadPrivateKeys,
+      );
+    }
+
+    if (_privateKeys.isEmpty) {
+      return const EmptyStateView(label: 'No private keys found.');
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _field('proxy_type', 'Proxy Type', _proxyTypeController),
-        ShadCard(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Proxy settings are split into their own tab now. We can extend this section with additional proxy fields next.',
-              style: ShadTheme.of(context).textTheme.muted,
+      children: _privateKeys.map((key) {
+        final isActive = key.uuid == activeUuid;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: ShadCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => setState(
+                () => _privateKeyUuidController.text = key.uuid,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          key.name.isNotEmpty ? key.name : 'Unnamed key',
+                          style: theme.textTheme.p.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (key.fingerprint.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            key.fingerprint,
+                            style: theme.textTheme.muted.copyWith(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (isActive) ...[
+                    const SizedBox(width: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'In use',
+                          style: theme.textTheme.small.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          LucideIcons.circleCheck,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit Server' : 'Add Server'),
+      drawer: const AppSidebarDrawer(),
+      appBar: AppPageHeader(
+        crumbs: ['Servers', widget.isEditing ? 'Edit Server' : 'Add Server'],
       ),
       body: SafeArea(
         top: false,
@@ -484,38 +552,49 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  ShadTabs<_ServerEditorTab>(
-                    value: _tab,
-                    onChanged: (value) => setState(() => _tab = value),
-                    tabs: [
-                      ShadTab(
-                        value: _ServerEditorTab.configuration,
-                        content: const SizedBox.shrink(),
-                        child: const Text('Configuration'),
-                      ),
-                      ShadTab(
-                        value: _ServerEditorTab.proxy,
-                        content: const SizedBox.shrink(),
-                        child: const Text('Proxy'),
-                      ),
-                    ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: ShadSelect<_ServerSection>(
+                      initialValue: _section,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _section = value);
+                        if (value == _ServerSection.privateKey &&
+                            _privateKeys.isEmpty &&
+                            !_loadingKeys) {
+                          _loadPrivateKeys();
+                        }
+                      },
+                      options: const [
+                        ShadOption(value: _ServerSection.general, child: Text('General')),
+                        ShadOption(value: _ServerSection.advanced, child: Text('Advanced')),
+                        ShadOption(value: _ServerSection.privateKey, child: Text('Private Key')),
+                        ShadOption(value: _ServerSection.proxy, child: Text('Proxy')),
+                      ],
+                      selectedOptionBuilder: (context, value) => Text(switch (value) {
+                        _ServerSection.general => 'General',
+                        _ServerSection.advanced => 'Advanced',
+                        _ServerSection.privateKey => 'Private Key',
+                        _ServerSection.proxy => 'Proxy',
+                      }),
+                    ),
                   ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
                   const SizedBox(height: 16),
-                  if (_tab == _ServerEditorTab.configuration)
-                    _buildConfigurationTab()
-                  else
-                    _buildProxyTab(),
+                  _buildSection(),
                   const SizedBox(height: 20),
-                  ShadButton(
-                    onPressed: (!_isDirty || _saving) ? null : _save,
-                    child: _saving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save'),
-                  ),
+                  if (_section != _ServerSection.privateKey)
+                    ShadButton(
+                      onPressed: (!_isDirty || _saving) ? null : _save,
+                      child: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Save'),
+                    ),
                 ],
               ),
       ),
@@ -523,38 +602,62 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
   }
 }
 
-class _LabeledSelect<T> extends StatelessWidget {
-  const _LabeledSelect({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-    required this.selectedOptionBuilder,
+class _FieldInfoPopover extends StatefulWidget {
+  const _FieldInfoPopover({
+    required this.title,
+    required this.description,
   });
 
-  final String label;
-  final T value;
-  final List<ShadOption<T>> options;
-  final ValueChanged<T?> onChanged;
-  final Widget Function(BuildContext, T) selectedOptionBuilder;
+  final String title;
+  final String description;
+
+  @override
+  State<_FieldInfoPopover> createState() => _FieldInfoPopoverState();
+}
+
+class _FieldInfoPopoverState extends State<_FieldInfoPopover> {
+  late final ShadPopoverController _controller = ShadPopoverController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: ShadSelect<T>(
-            initialValue: value,
-            onChanged: onChanged,
-            options: options,
-            selectedOptionBuilder: selectedOptionBuilder,
+    final theme = ShadTheme.of(context);
+
+    return ShadPopover(
+      controller: _controller,
+      popover: (context) => SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title, style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(
+              widget.description,
+              style: theme.textTheme.muted.copyWith(height: 1.4),
+            ),
+          ],
+        ),
+      ),
+      child: SizedBox.square(
+        dimension: 24,
+        child: OverflowBox(
+          maxWidth: 28,
+          maxHeight: 28,
+          child: ShadIconButton.ghost(
+            iconSize: 16,
+            padding: const EdgeInsets.all(2),
+            icon: const Icon(LucideIcons.info),
+            onPressed: _controller.toggle,
           ),
         ),
-      ],
+      ),
     );
   }
 }

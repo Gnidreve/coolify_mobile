@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../components/resource_card.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
 import '../../core/utils/resource_status.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/state_views.dart';
 import '../databases/index.dart';
 import 'application_details_page.dart';
 import 'create_environment_resource_page.dart';
@@ -81,6 +83,11 @@ class _ProjectEnvironmentResourcesPageState
         builder: (_) => ApplicationDetailsPage(
           applicationUuid: application.uuid,
           fallbackTitle: application.name,
+          parentCrumbs: [
+            'Projects',
+            widget.projectName,
+            widget.environment.name,
+          ],
         ),
       ),
     );
@@ -91,6 +98,7 @@ class _ProjectEnvironmentResourcesPageState
       MaterialPageRoute(
         builder: (_) => CreateEnvironmentResourcePage(
           projectUuid: widget.projectUuid,
+          projectName: widget.projectName,
           environment: widget.environment,
         ),
       ),
@@ -102,41 +110,44 @@ class _ProjectEnvironmentResourcesPageState
 
   Future<void> _openDatabase(DatabaseResource database) async {
     final databaseContext = DatabaseContext(
+      projectName: widget.projectName,
       projectUuid: widget.projectUuid,
       environmentUuid: widget.environment.uuid,
       environmentName: widget.environment.name,
     );
 
-    final page = switch (database.serviceType) {
-      'postgresql' => PostgreSqlDatabaseEditPage(
+    final serviceType = DatabaseServiceType.fromApiValue(database.serviceType);
+
+    final page = switch (serviceType) {
+      DatabaseServiceType.postgresql => PostgreSqlDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'clickhouse' => ClickHouseDatabaseEditPage(
+      DatabaseServiceType.clickhouse => ClickHouseDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'dragonfly' => DragonflyDatabaseEditPage(
+      DatabaseServiceType.dragonfly => DragonflyDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'redis' => RedisDatabaseEditPage(
+      DatabaseServiceType.redis => RedisDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'keydb' => KeyDbDatabaseEditPage(
+      DatabaseServiceType.keydb => KeyDbDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'mariadb' => MariaDbDatabaseEditPage(
+      DatabaseServiceType.mariadb => MariaDbDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'mysql' => MySqlDatabaseEditPage(
+      DatabaseServiceType.mysql => MySqlDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
-      'mongodb' => MongoDbDatabaseEditPage(
+      DatabaseServiceType.mongodb => MongoDbDatabaseEditPage(
         context: databaseContext,
         databaseUuid: database.uuid,
       ),
@@ -164,8 +175,9 @@ class _ProjectEnvironmentResourcesPageState
     final theme = ShadTheme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.environment.name),
+      drawer: const AppSidebarDrawer(),
+      appBar: AppPageHeader(
+        crumbs: ['Projects', widget.projectName, widget.environment.name],
         actions: [
           IconButton(
             onPressed: _openCreateResource,

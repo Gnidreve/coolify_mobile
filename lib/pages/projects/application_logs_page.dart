@@ -3,7 +3,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/state_views.dart';
 
 class ApplicationLogsPage extends StatefulWidget {
   const ApplicationLogsPage({

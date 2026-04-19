@@ -158,19 +158,23 @@ class _ApplicationConfigSectionEditorState
 
   @override
   Widget build(BuildContext context) {
-    if (widget.fields.isEmpty) {
+    final visibleFields = widget.fields
+        .where((f) => f.editable && !f.hidden)
+        .toList();
+
+    if (visibleFields.isEmpty) {
       return Text(
         'No configurable fields in this section.',
         style: ShadTheme.of(context).textTheme.muted,
       );
     }
 
-    final hasEditableFields = widget.fields.any((field) => field.editable);
+    final hasEditableFields = visibleFields.any((field) => field.editable);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ...widget.fields.map(
+        ...visibleFields.map(
           (field) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _buildField(field),

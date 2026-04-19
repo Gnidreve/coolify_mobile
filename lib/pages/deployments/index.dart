@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
 import '../../core/utils/resource_status.dart';
-import '../../core/widgets/resource_card.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/resource_card.dart';
+import '../../components/state_views.dart';
 
 class DeploymentsPage extends StatefulWidget {
   const DeploymentsPage({super.key});
@@ -60,39 +62,31 @@ class _DeploymentsPageState extends State<DeploymentsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
-
     if (_loading) return const LoadingStateView();
     if (_error != null) {
       return ErrorStateView(message: _error!, onRetry: _load);
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text('Deployments', style: theme.textTheme.h4)),
-            ShadButton.outline(
-              onPressed: _load,
-              child: const Icon(LucideIcons.refreshCw, size: 16),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (_deployments.isEmpty)
-          const EmptyStateView(label: 'No deployments found.')
-        else
-          ..._deployments.map(
-            (deployment) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _DeploymentListCard(
-                deployment: deployment,
-                onTap: () => _openDeployment(deployment),
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_deployments.isEmpty)
+            const EmptyStateView(label: 'No deployments found.')
+          else
+            ..._deployments.map(
+              (deployment) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _DeploymentListCard(
+                  deployment: deployment,
+                  onTap: () => _openDeployment(deployment),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -147,7 +141,8 @@ class _DeploymentDetailsPageState extends State<_DeploymentDetailsPage> {
     final theme = ShadTheme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Deployment')),
+      drawer: const AppSidebarDrawer(),
+      appBar: const AppPageHeader(crumbs: ['Deployments', 'Deployment']),
       body: SafeArea(
         top: false,
         child: _loading
@@ -159,40 +154,45 @@ class _DeploymentDetailsPageState extends State<_DeploymentDetailsPage> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _InfoCard(
+                  _DeploymentField(
                     label: 'Application',
                     value: deployment.applicationName,
                   ),
-                  _InfoCard(label: 'Server', value: deployment.serverName),
-                  _InfoCard(label: 'Status', value: deployment.status),
-                  _InfoCard(label: 'Commit', value: deployment.commit),
-                  _InfoCard(
+                  _DeploymentField(label: 'Server', value: deployment.serverName),
+                  _DeploymentField(label: 'Status', value: deployment.status),
+                  _DeploymentField(label: 'Commit', value: deployment.commit),
+                  _DeploymentField(
                     label: 'Commit Message',
                     value: deployment.commitMessage,
                   ),
-                  _InfoCard(label: 'Created At', value: deployment.createdAt),
-                  _InfoCard(label: 'Updated At', value: deployment.updatedAt),
-                  _InfoCard(
+                  _DeploymentField(
+                    label: 'Created At',
+                    value: deployment.createdAt,
+                  ),
+                  _DeploymentField(
+                    label: 'Updated At',
+                    value: deployment.updatedAt,
+                  ),
+                  _DeploymentField(
                     label: 'Deployment URL',
                     value: deployment.deploymentUrl,
                   ),
-                  ShadCard(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Logs', style: theme.textTheme.large),
-                          const SizedBox(height: 8),
-                          SelectableText(
-                            deployment.logs.isEmpty
-                                ? 'No logs available.'
-                                : deployment.logs,
-                            style: theme.textTheme.small.copyWith(
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ],
+                  const SizedBox(height: 20),
+                  Text('Logs', style: theme.textTheme.h4),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.muted,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SelectableText(
+                      deployment.logs.isEmpty
+                          ? 'No logs available.'
+                          : deployment.logs,
+                      style: theme.textTheme.small.copyWith(
+                        fontFamily: 'monospace',
                       ),
                     ),
                   ),
@@ -203,8 +203,8 @@ class _DeploymentDetailsPageState extends State<_DeploymentDetailsPage> {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.label, required this.value});
+class _DeploymentField extends StatelessWidget {
+  const _DeploymentField({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -214,24 +214,19 @@ class _InfoCard extends StatelessWidget {
     final theme = ShadTheme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: ShadCard(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: theme.textTheme.small),
-              const SizedBox(height: 6),
-              SelectableText(
-                value.isEmpty ? '-' : value,
-                style: theme.textTheme.muted.copyWith(
-                  color: theme.colorScheme.foreground,
-                ),
-              ),
-            ],
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: theme.textTheme.small),
+          const SizedBox(height: 6),
+          SelectableText(
+            value.isEmpty ? '-' : value,
+            style: theme.textTheme.p.copyWith(
+              color: theme.colorScheme.foreground,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

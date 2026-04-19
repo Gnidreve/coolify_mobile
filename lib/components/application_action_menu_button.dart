@@ -40,9 +40,7 @@ class _ApplicationActionMenuButtonState
       if (!mounted) return;
       AppToast.error(context, error.toString(), title: 'Action failed');
     } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -61,58 +59,66 @@ class _ApplicationActionMenuButtonState
     return api.applications.restart(widget.applicationUuid);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return MenuAnchor(
-      menuChildren: [
-        MenuItemButton(
-          onPressed: _busy
-              ? null
-              : () => _runAction(
-                  _start,
-                  fallbackSuccessTitle: 'Application started',
-                ),
-          child: const Text('Start'),
-        ),
-        MenuItemButton(
-          onPressed: _busy
-              ? null
-              : () => _runAction(
-                  _stop,
-                  fallbackSuccessTitle: 'Application stopped',
-                ),
-          child: const Text('Stop'),
-        ),
-        MenuItemButton(
-          onPressed: _busy
-              ? null
-              : () => _runAction(
+  void _openSheet() {
+    final theme = ShadTheme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: theme.colorScheme.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('What cha gonna do?', style: theme.textTheme.h4),
+            const SizedBox(height: 16),
+            ShadButton.outline(
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                _runAction(_start, fallbackSuccessTitle: 'Application started');
+              },
+              child: const Text('Start'),
+            ),
+            const SizedBox(height: 8),
+            ShadButton.outline(
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                _runAction(_stop, fallbackSuccessTitle: 'Application stopped');
+              },
+              child: const Text('Stop'),
+            ),
+            const SizedBox(height: 8),
+            ShadButton.outline(
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                _runAction(
                   _restart,
                   fallbackSuccessTitle: 'Application restarted',
-                ),
-          child: const Text('Restart'),
+                );
+              },
+              child: const Text('Restart'),
+            ),
+          ],
         ),
-      ],
-      builder: (context, controller, child) {
-        return IconButton(
-          tooltip: 'Open actions',
-          onPressed: _busy
-              ? null
-              : () {
-                  if (controller.isOpen) {
-                    controller.close();
-                  } else {
-                    controller.open();
-                  }
-                },
-          icon: _busy
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(LucideIcons.ellipsisVertical),
-        );
-      },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Open actions',
+      onPressed: _busy ? null : _openSheet,
+      icon: _busy
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(LucideIcons.ellipsisVertical),
     );
   }
 }

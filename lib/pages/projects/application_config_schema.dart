@@ -8,12 +8,14 @@ class ApplicationConfigFieldDefinition {
     this.type, {
     this.editable = false,
     this.patchOnly = false,
+    this.hidden = false,
   });
 
   final String key;
   final ApplicationConfigFieldType type;
   final bool editable;
   final bool patchOnly;
+  final bool hidden;
 }
 
 class ApplicationConfigSchema {
@@ -361,18 +363,6 @@ class ApplicationConfigSchema {
       editable: true,
     ),
     ApplicationConfigFieldDefinition(
-      'created_at',
-      ApplicationConfigFieldType.text,
-    ),
-    ApplicationConfigFieldDefinition(
-      'updated_at',
-      ApplicationConfigFieldType.text,
-    ),
-    ApplicationConfigFieldDefinition(
-      'deleted_at',
-      ApplicationConfigFieldType.text,
-    ),
-    ApplicationConfigFieldDefinition(
       'compose_parsing_version',
       ApplicationConfigFieldType.text,
     ),
@@ -400,24 +390,28 @@ class ApplicationConfigSchema {
       ApplicationConfigFieldType.text,
       editable: true,
       patchOnly: true,
+      hidden: true,
     ),
     ApplicationConfigFieldDefinition(
       'server_uuid',
       ApplicationConfigFieldType.text,
       editable: true,
       patchOnly: true,
+      hidden: true,
     ),
     ApplicationConfigFieldDefinition(
       'environment_name',
       ApplicationConfigFieldType.text,
       editable: true,
       patchOnly: true,
+      hidden: true,
     ),
     ApplicationConfigFieldDefinition(
       'github_app_uuid',
       ApplicationConfigFieldType.text,
       editable: true,
       patchOnly: true,
+      hidden: true,
     ),
     ApplicationConfigFieldDefinition(
       'domains',
@@ -533,6 +527,16 @@ class ApplicationConfigSchema {
     'custom_healthcheck_found',
   };
 
+  static const Set<String> _limitsKeys = {
+    'limits_memory',
+    'limits_memory_swap',
+    'limits_memory_swappiness',
+    'limits_memory_reservation',
+    'limits_cpus',
+    'limits_cpuset',
+    'limits_cpu_shares',
+  };
+
   static const Set<String> _advancedKeys = {
     'build_pack',
     'docker_registry_image_name',
@@ -584,9 +588,13 @@ class ApplicationConfigSchema {
                 !_gitKeys.contains(field.key) &&
                 !_webhookKeys.contains(field.key) &&
                 !_healthCheckKeys.contains(field.key) &&
-                !_advancedKeys.contains(field.key),
+                !_advancedKeys.contains(field.key) &&
+                !_limitsKeys.contains(field.key),
           )
           .toList();
+
+  static List<ApplicationConfigFieldDefinition> get limitsFields =>
+      _filterByKeys(_limitsKeys);
 
   static List<ApplicationConfigFieldDefinition> get gitFields =>
       _filterByKeys(_gitKeys);

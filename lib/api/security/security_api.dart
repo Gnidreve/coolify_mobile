@@ -39,18 +39,22 @@ class PrivateKeysApi {
     return PrivateKeyResource.fromJson(data);
   }
 
-  Future<PrivateKeyResource> update({
+  Future<PrivateKeyResource> update(
+    String uuid, {
     required String name,
     required String description,
-    required String privateKey,
+    String? privateKey,
   }) async {
+    final body = <String, dynamic>{
+      'name': name,
+      'description': description,
+    };
+    body['private_key'] = privateKey;
+    body.removeWhere((key, value) => value == null);
+
     final data = await _client.patchObject(
-      '/security/keys',
-      body: {
-        'name': name,
-        'description': description,
-        'private_key': privateKey,
-      },
+      '/security/keys/$uuid',
+      body: body,
     );
     return PrivateKeyResource.fromJson(data);
   }

@@ -25,7 +25,7 @@ A Flutter mobile app for managing your [Coolify](https://coolify.io) self-hostin
    COOLIFY_AUTH_TOKEN=your_api_token_here
    ```
 
-   > **Note:** The `.env` file is only used in development. On first launch the values are automatically seeded into secure storage and the login screen is skipped. In production, credentials are entered manually via the login screen.
+   > **Note:** `.env` values are baked in at build time as default values in the login screen inputs. The credentials only reach secure storage after the user actively submits the login form. After logout the login screen reappears with the `.env` defaults pre-filled.
 
 2. Install dependencies:
 
@@ -38,10 +38,6 @@ A Flutter mobile app for managing your [Coolify](https://coolify.io) self-hostin
    ```bash
    flutter run
    ```
-
-### Production
-
-Credentials are never hardcoded. On first launch without a `.env` the app shows a login screen prompting for the instance URL and API token. Both values are stored in the device's secure storage (Keychain on iOS, EncryptedSharedPreferences on Android).
 
 ---
 
@@ -65,14 +61,9 @@ lib/
 ├── app/
 │   └── app.dart                 # Root widget, theme setup, RootGate (login vs. home)
 ├── assets/                      # Static assets (SVGs, images, bundled fonts)
+│   └── ...
 ├── components/                  # Reusable UI building blocks used across pages
-│   ├── app_card.dart
-│   ├── app_spacing.dart
-│   ├── application_config_section_editor.dart
-│   ├── labeled_value_card.dart
-│   ├── page_title_bar.dart
-│   ├── resource_card.dart
-│   └── state_views.dart
+│   └── ...
 ├── core/
 │   ├── services/
 │   │   ├── credentials_service.dart   # Secure storage for URL + API token
@@ -94,6 +85,7 @@ lib/
 │   ├── teams/
 │   └── settings/
 ├── main.dart
+├── settings.dart
 └── theme.dart                   # Central shadcn_ui theme config + Geist Sans
 ```
 
@@ -139,44 +131,15 @@ Current implemented resource groups:
 
 ## Tech Stack
 
-| Concern | Package |
-|---|---|
-| UI components | [`shadcn_ui`](https://pub.dev/packages/shadcn_ui) |
-| Toasts | [`shadcn_ui` Sonner](https://pub.dev/packages/shadcn_ui) |
-| Icons | [`lucide_icons_flutter`](https://pub.dev/packages/lucide_icons_flutter) |
-| Secure storage | [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage) |
-| Preferences | [`shared_preferences`](https://pub.dev/packages/shared_preferences) |
-| HTTP | [`http`](https://pub.dev/packages/http) |
-| SVG rendering | [`flutter_svg`](https://pub.dev/packages/flutter_svg) |
-| Environment | [`flutter_dotenv`](https://pub.dev/packages/flutter_dotenv) |
+| Concern         | Package                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| UI components   | [`shadcn_ui`](https://pub.dev/packages/shadcn_ui)                                                                              |
+| Toasts          | [`shadcn_ui` Sonner](https://pub.dev/packages/shadcn_ui)                                                                       |
+| Icons           | [`lucide_icons_flutter`](https://pub.dev/packages/lucide_icons_flutter)                                                        |
+| Secure storage  | [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage)                                                    |
+| Preferences     | [`shared_preferences`](https://pub.dev/packages/shared_preferences)                                                            |
+| HTTP            | [`http`](https://pub.dev/packages/http)                                                                                        |
+| SVG rendering   | [`flutter_svg`](https://pub.dev/packages/flutter_svg)                                                                          |
+| Environment     | [`flutter_dotenv`](https://pub.dev/packages/flutter_dotenv)                                                                    |
 | Push / Firebase | [`firebase_core`](https://pub.dev/packages/firebase_core), [`firebase_messaging`](https://pub.dev/packages/firebase_messaging) |
-| Typography | Local bundled `Geist Sans` |
-
----
-
-## App Flow
-
-```
-Launch
-  └── credentials in secure storage?
-        ├── No  → Login screen (URL + API token)
-        └── Yes → Health check (GET /api/health)
-                    ├── OK      → Home
-                    └── Failed  → Error screen (Retry / Re-enter credentials)
-```
-
-## Native IDs
-
-- Android package / namespace: `com.everding.coolify_mobile`
-- iOS bundle identifier: `com.everding.coolify_mobile`
-
-## Notifications
-
-- Firebase Messaging is wired for Android using `google-services.json`
-- Under `Settings > App`, `Allow Notifications` requests the permission dialog
-- After permission is granted, the app fetches the Firebase device id (FCM token)
-- The device id is shown once in a copyable alert dialog and then acknowledged in preferences
-
----
-
-> **Warning:** Never commit your `.env` file. It is listed in `.gitignore` by default (verify this for your setup).
+| Typography      | Local bundled `Geist Sans`                                                                                                     |

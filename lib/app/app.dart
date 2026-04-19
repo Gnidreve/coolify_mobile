@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -40,37 +38,93 @@ class _CoolifyAppState extends State<CoolifyApp> {
       themeMode: _themeMode,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),
-      home: Builder(
-        builder: (context) {
-          final mediaQuery = MediaQuery.of(context);
-          final bottomInset = math.max(
-            mediaQuery.padding.bottom,
-            mediaQuery.viewPadding.bottom,
-          );
-
-          return ShadSonner(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
-            child: Builder(
-              builder: (context) {
-                final isDark =
-                    ShadTheme.of(context).brightness == Brightness.dark;
-                final bgColor = ShadTheme.of(context).colorScheme.background;
-                return AnnotatedRegion<SystemUiOverlayStyle>(
-                  value: SystemUiOverlayStyle(
-                    systemNavigationBarColor: bgColor,
-                    systemNavigationBarIconBrightness: isDark
-                        ? Brightness.light
-                        : Brightness.dark,
-                    systemNavigationBarContrastEnforced: false,
-                    systemNavigationBarDividerColor: Colors.transparent,
-                  ),
-                  child: _RootGate(onThemeModeChanged: _onThemeModeChanged),
-                );
-              },
-            ),
-          );
-        },
+      home: _SonnerShell(
+        child: Builder(
+          builder: (context) {
+            final isDark =
+                ShadTheme.of(context).brightness == Brightness.dark;
+            final bgColor = ShadTheme.of(context).colorScheme.background;
+            return Theme(
+              data: Theme.of(context).copyWith(
+                scaffoldBackgroundColor: bgColor,
+                appBarTheme: AppBarTheme(
+                  backgroundColor: bgColor,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                ),
+              ),
+              child: AnnotatedRegion<SystemUiOverlayStyle>(
+                value: SystemUiOverlayStyle(
+                  systemNavigationBarColor: bgColor,
+                  systemNavigationBarIconBrightness: isDark
+                      ? Brightness.light
+                      : Brightness.dark,
+                  systemNavigationBarContrastEnforced: false,
+                  systemNavigationBarDividerColor: Colors.transparent,
+                ),
+                child: _RootGate(onThemeModeChanged: _onThemeModeChanged),
+              ),
+            );
+          },
+        ),
       ),
+    );
+  }
+}
+
+/// Wraps [child] in a [ShadSonner] with a bottom padding that always sits
+/// above the native navigation bar. Reacts to metric changes (e.g. rotation,
+/// keyboard) via [WidgetsBindingObserver] so the inset is never stale.
+class _SonnerShell extends StatefulWidget {
+  const _SonnerShell({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SonnerShell> createState() => _SonnerShellState();
+}
+
+class _SonnerShellState extends State<_SonnerShell>
+    with WidgetsBindingObserver {
+  double _bottomInset = 0;
+  static const double _horizontalPadding = 16;
+  static const double _topPadding = 16;
+  static const double _bottomSpacingAboveSafeArea = 20;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _updateInset();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() => _updateInset();
+
+  void _updateInset() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final inset = view.viewPadding.bottom / view.devicePixelRatio;
+    if (inset != _bottomInset) {
+      setState(() => _bottomInset = inset);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ShadSonner(
+      padding: EdgeInsets.fromLTRB(
+        _horizontalPadding,
+        _topPadding,
+        _horizontalPadding,
+        _topPadding + _bottomInset + _bottomSpacingAboveSafeArea,
+      ),
+      child: widget.child,
     );
   }
 }
@@ -103,18 +157,28 @@ class _RootGateState extends State<_RootGate> {
     setState(() => _state = _GateState.loading);
 
     final creds = CredentialsService.instance;
-    final hasCredentials = await creds.hasCredentials();
 
-    if (!hasCredentials) {
+    final String? baseUrl;
+    final String? apiToken;
+
+    try {
+      final hasCredentials = await creds.hasCredentials();
+      if (!hasCredentials) {
+        if (mounted) setState(() => _state = _GateState.login);
+        return;
+      }
+      baseUrl = await creds.getBaseUrl();
+      apiToken = await creds.getApiToken();
+    } catch (_) {
+      // Corrupt or unreadable secure storage (e.g. after keystore invalidation).
+      // Clear and fall back to login so the user can re-enter credentials.
+      await creds.clear();
       if (mounted) setState(() => _state = _GateState.login);
       return;
     }
 
-    final baseUrl = await creds.getBaseUrl();
-    final apiToken = await creds.getApiToken();
-    final api = CoolifyApi(baseUrl: baseUrl!, apiToken: apiToken!);
-
     try {
+      final api = CoolifyApi(baseUrl: baseUrl!, apiToken: apiToken!);
       final isUp = await api.health.check();
       if (!mounted) return;
       setState(() => _state = isUp ? _GateState.home : _GateState.healthError);

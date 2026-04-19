@@ -59,6 +59,57 @@ class ApplicationsApi {
 
   Future<String> restart(String uuid) => _runAction(uuid, 'restart');
 
+  Future<ApplicationCreateResponse> createPublic({
+    required Map<String, dynamic> body,
+  }) async {
+    final data = await _client.postObject('/applications/public', body: body);
+    return ApplicationCreateResponse.fromJson(data);
+  }
+
+  Future<ApplicationCreateResponse> createPrivateGithubApp({
+    required Map<String, dynamic> body,
+  }) async {
+    final data = await _client.postObject(
+      '/applications/private-gh-app',
+      body: body,
+    );
+    return ApplicationCreateResponse.fromJson(data);
+  }
+
+  Future<ApplicationCreateResponse> createPrivateDeployKey({
+    required Map<String, dynamic> body,
+  }) async {
+    final data = await _client.postObject(
+      '/applications/private-deploy-key',
+      body: body,
+    );
+    return ApplicationCreateResponse.fromJson(data);
+  }
+
+  Future<ApplicationCreateResponse> createDockerfile({
+    required Map<String, dynamic> body,
+  }) async {
+    final data = await _client.postObject('/applications/dockerfile', body: body);
+    return ApplicationCreateResponse.fromJson(data);
+  }
+
+  Future<ApplicationCreateResponse> createDockerImage({
+    required Map<String, dynamic> body,
+  }) async {
+    final data = await _client.postObject('/applications/dockerimage', body: body);
+    return ApplicationCreateResponse.fromJson(data);
+  }
+
+  Future<ApplicationCreateResponse> createDockerCompose({
+    required Map<String, dynamic> body,
+  }) async {
+    final data = await _client.postObject(
+      '/applications/dockercompose',
+      body: body,
+    );
+    return ApplicationCreateResponse.fromJson(data);
+  }
+
   Future<String> _runAction(String uuid, String action) async {
     final data = await _client.getObject('/applications/$uuid/$action');
     final message = data['message'] ?? data['msg'] ?? data['detail'];
@@ -67,6 +118,16 @@ class ApplicationsApi {
     }
     return 'Application $action request sent.';
   }
+}
+
+class ApplicationCreateResponse {
+  const ApplicationCreateResponse({required this.uuid});
+
+  factory ApplicationCreateResponse.fromJson(Map<String, dynamic> json) {
+    return ApplicationCreateResponse(uuid: json['uuid'] as String? ?? '');
+  }
+
+  final String uuid;
 }
 
 class ApplicationResource {

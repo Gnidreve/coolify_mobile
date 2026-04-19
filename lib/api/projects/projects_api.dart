@@ -15,6 +15,28 @@ class ProjectsApi {
     final data = await _client.getList('/projects/$projectUuid/environments');
     return data.map(ProjectEnvironment.fromJson).toList();
   }
+
+  Future<ProjectEnvironment> createEnvironment({
+    required String projectUuid,
+    required String name,
+  }) async {
+    final data = await _client.postObject(
+      '/projects/$projectUuid/environments',
+      body: {'name': name},
+    );
+    return ProjectEnvironment.fromJson(data);
+  }
+
+  Future<ProjectSummary> create({
+    required String name,
+    String description = '',
+  }) async {
+    final data = await _client.postObject('/projects', body: {
+      'name': name,
+      'description': description,
+    });
+    return ProjectSummary.fromJson(data);
+  }
 }
 
 class ProjectSummary {

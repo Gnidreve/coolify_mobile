@@ -2,66 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
-import '../../core/widgets/resource_card.dart';
-import '../../core/widgets/state_views.dart';
-
-enum _SecurityTab { privateKeys, apiTokens }
+import '../../components/resource_card.dart';
+import '../../components/state_views.dart';
 
 class KeysTokensPage extends StatefulWidget {
   const KeysTokensPage({super.key});
 
   @override
-  State<KeysTokensPage> createState() => _KeysTokensPageState();
+  State<KeysTokensPage> createState() => KeysTokensPageState();
 }
 
-class _KeysTokensPageState extends State<KeysTokensPage> {
-  _SecurityTab _tab = _SecurityTab.privateKeys;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ShadTabs<_SecurityTab>(
-          value: _tab,
-          onChanged: (value) => setState(() => _tab = value),
-          tabs: [
-            ShadTab(
-              value: _SecurityTab.privateKeys,
-              content: const SizedBox.shrink(),
-              child: const Text('Private Keys'),
-            ),
-            ShadTab(
-              value: _SecurityTab.apiTokens,
-              content: const SizedBox.shrink(),
-              child: const Text('API Tokens'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: switch (_tab) {
-            _SecurityTab.privateKeys => const _PrivateKeysTab(),
-            _SecurityTab.apiTokens => const Center(
-              child: _SecurityTabContent(label: 'API Tokens'),
-            ),
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _PrivateKeysTab extends StatefulWidget {
-  const _PrivateKeysTab();
-
-  @override
-  State<_PrivateKeysTab> createState() => _PrivateKeysTabState();
-}
-
-class _PrivateKeysTabState extends State<_PrivateKeysTab> {
+class KeysTokensPageState extends State<KeysTokensPage> {
   bool _loading = true;
   String? _error;
   List<PrivateKeyResource> _keys = const [];
@@ -106,6 +61,8 @@ class _PrivateKeysTabState extends State<_PrivateKeysTab> {
     }
   }
 
+  void openAdd() => _openEditor();
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const LoadingStateView();
@@ -116,31 +73,6 @@ class _PrivateKeysTabState extends State<_PrivateKeysTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Private Keys',
-                    style: ShadTheme.of(context).textTheme.h4,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_keys.length} loaded',
-                    style: ShadTheme.of(context).textTheme.muted,
-                  ),
-                ],
-              ),
-            ),
-            ShadButton.outline(
-              onPressed: () => _openEditor(),
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         if (_keys.isEmpty)
           const SizedBox(
             height: 240,
@@ -178,27 +110,7 @@ class _PrivateKeysTabState extends State<_PrivateKeysTab> {
     if (item.description.trim().isNotEmpty) {
       return item.description.trim();
     }
-    if (item.fingerprint.trim().isNotEmpty) {
-      return item.fingerprint.trim();
-    }
-    if (item.uuid.trim().isNotEmpty) {
-      return item.uuid.trim();
-    }
-    return 'No description';
-  }
-}
-
-class _SecurityTabContent extends StatelessWidget {
-  const _SecurityTabContent({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Text(label, style: ShadTheme.of(context).textTheme.muted),
-    );
+    return '';
   }
 }
 
@@ -221,8 +133,6 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
-  String _publicKey = '';
-  String _fingerprint = '';
   Map<String, String> _initial = const {
     'name': '',
     'description': '',
@@ -272,13 +182,11 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
       _initial = {
         'name': key.name,
         'description': key.description,
-        'private_key': key.privateKey,
+        'private_key': '',
       };
-      _publicKey = key.publicKey;
-      _fingerprint = key.fingerprint;
       _nameController.text = key.name;
       _descriptionController.text = key.description;
-      _privateKeyController.text = key.privateKey;
+      // Private key is write-only — not pre-populated
     } catch (error) {
       _error = error.toString();
       if (mounted) {
@@ -300,7 +208,7 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
     final description = _descriptionController.text.trim();
     final privateKey = _privateKeyController.text.trim();
 
-    if (name.isEmpty || privateKey.isEmpty) {
+    if (name.isEmpty || (!widget.isEditing && privateKey.isEmpty)) {
       AppToast.error(
         context,
         'Name and private key are required.',
@@ -315,9 +223,10 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
       final api = await CoolifyClientService.createClient();
       if (widget.isEditing) {
         await api.security.keys.update(
+          widget.uuid!,
           name: name,
           description: description,
-          privateKey: privateKey,
+          privateKey: privateKey.isEmpty ? null : privateKey,
         );
       } else {
         await api.security.keys.create(
@@ -343,11 +252,13 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit Private Key' : 'Add Private Key'),
+      drawer: const AppSidebarDrawer(),
+      appBar: AppPageHeader(
+        crumbs: [
+          'Keys & Tokens',
+          widget.isEditing ? 'Edit Private Key' : 'Add Private Key',
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -370,26 +281,18 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
                     controller: _descriptionController,
                     label: const Text('Description'),
                     placeholder: const Text('Short description'),
+                    keyboardType: TextInputType.multiline,
+                    minLines: 3,
+                    maxLines: 6,
                   ),
                   if (widget.isEditing) ...[
-                    const SizedBox(height: 20),
-                    Text('Details', style: theme.textTheme.h4),
-                    const SizedBox(height: 12),
-                    _ReadOnlyDetailsCard(
-                      label: 'Fingerprint',
-                      value: _fingerprint,
-                    ),
-                    const SizedBox(height: 12),
-                    _ReadOnlyDetailsCard(
-                      label: 'Public Key',
-                      value: _publicKey,
-                      monospace: true,
-                    ),
-                    const SizedBox(height: 12),
-                    _ReadOnlyDetailsCard(
-                      label: 'Private Key',
-                      value: _privateKeyController.text,
-                      monospace: true,
+                    ShadInputFormField(
+                      id: 'private_key',
+                      controller: _privateKeyController,
+                      label: const Text('New Private Key'),
+                      placeholder: const Text('Leave empty to keep unchanged'),
+                      maxLines: 12,
+                      minLines: 8,
                     ),
                   ] else ...[
                     const SizedBox(height: 12),
@@ -415,43 +318,6 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
                   ),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-class _ReadOnlyDetailsCard extends StatelessWidget {
-  const _ReadOnlyDetailsCard({
-    required this.label,
-    required this.value,
-    this.monospace = false,
-  });
-
-  final String label;
-  final String value;
-  final bool monospace;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
-
-    return ShadCard(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: theme.textTheme.small),
-            const SizedBox(height: 8),
-            SelectableText(
-              value.isEmpty ? '-' : value,
-              style: theme.textTheme.muted.copyWith(
-                color: theme.colorScheme.foreground,
-                fontFamily: monospace ? 'monospace' : null,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

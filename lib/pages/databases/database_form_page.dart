@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../components/app_page_header.dart';
+import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
-import '../../core/widgets/state_views.dart';
+import '../../components/state_views.dart';
 
 class DatabaseContext {
   const DatabaseContext({
+    required this.projectName,
     required this.projectUuid,
     required this.environmentUuid,
     required this.environmentName,
   });
 
+  final String projectName;
   final String projectUuid;
   final String environmentUuid;
   final String environmentName;
@@ -48,6 +52,21 @@ enum DatabaseServiceType {
     DatabaseServiceType.mysql => 'MySQL',
     DatabaseServiceType.mongodb => 'MongoDB',
   };
+
+  static DatabaseServiceType? fromApiValue(String value) {
+    final normalized = value.trim().toLowerCase().replaceAll('_', '');
+    return switch (normalized) {
+      'postgresql' || 'postgres' => DatabaseServiceType.postgresql,
+      'clickhouse' => DatabaseServiceType.clickhouse,
+      'dragonfly' || 'dragonflydb' => DatabaseServiceType.dragonfly,
+      'redis' => DatabaseServiceType.redis,
+      'keydb' => DatabaseServiceType.keydb,
+      'mariadb' => DatabaseServiceType.mariadb,
+      'mysql' => DatabaseServiceType.mysql,
+      'mongodb' || 'mongo' => DatabaseServiceType.mongodb,
+      _ => null,
+    };
+  }
 }
 
 class DatabaseFormPage extends StatefulWidget {
@@ -74,6 +93,22 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  _DatabaseSection _section = _DatabaseSection.general;
+
+  static const _hiddenCreateKeys = {
+    'server_uuid',
+    'project_uuid',
+    'environment_name',
+    'environment_uuid',
+    'destination_uuid',
+  };
+
+  static const _advancedEditKeys = {
+    'is_public', 'public_port', 'public_port_timeout',
+    'limits_memory', 'limits_memory_swap', 'limits_memory_swappiness',
+    'limits_memory_reservation', 'limits_cpus', 'limits_cpuset',
+    'limits_cpu_shares',
+  };
 
   static const List<_DatabaseFieldDefinition> _commonCreateFields = [
     _DatabaseFieldDefinition('server_uuid', _DatabaseFieldType.text),
@@ -194,6 +229,18 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
 
   List<_DatabaseFieldDefinition> get _activeFields =>
       widget.isEditing ? _editFields : _createFields;
+
+  List<_DatabaseFieldDefinition> get _visibleFields {
+    if (!widget.isEditing) {
+      return _createFields
+          .where((f) => !_hiddenCreateKeys.contains(f.key))
+          .toList();
+    }
+    return _editFields.where((f) {
+      final isAdvanced = _advancedEditKeys.contains(f.key);
+      return _section == _DatabaseSection.advanced ? isAdvanced : !isAdvanced;
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -330,12 +377,16 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
+      drawer: const AppSidebarDrawer(),
+      appBar: AppPageHeader(
+        crumbs: [
+          'Projects',
+          widget.context.projectName,
+          widget.context.environmentName,
           widget.isEditing
               ? 'Edit ${widget.serviceType.title}'
               : 'Add ${widget.serviceType.title}',
-        ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -346,7 +397,27 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  ..._activeFields.map(_buildField),
+                  if (widget.isEditing) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ShadSelect<_DatabaseSection>(
+                        initialValue: _section,
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _section = value);
+                        },
+                        options: const [
+                          ShadOption(value: _DatabaseSection.general, child: Text('General')),
+                          ShadOption(value: _DatabaseSection.advanced, child: Text('Advanced')),
+                        ],
+                        selectedOptionBuilder: (context, value) => Text(
+                          value == _DatabaseSection.general ? 'General' : 'Advanced',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  ..._visibleFields.map(_buildField),
                   const SizedBox(height: 8),
                   ShadButton(
                     onPressed: _saving ? null : _save,
@@ -412,6 +483,8 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
 }
 
 enum _DatabaseFieldType { text, multiline, integer, boolean }
+
+enum _DatabaseSection { general, advanced }
 
 class _DatabaseFieldDefinition {
   const _DatabaseFieldDefinition(this.key, this.type);
