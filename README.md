@@ -107,6 +107,8 @@ await coolify.deployments.list();
 await coolify.teams.list();
 ```
 
+The full, current Coolify OpenAPI spec lives in `docs/openapi.json` (fetched from `coollabsio/coolify`, branch `v4.x`, 2026-10-19). Refresh it from `https://raw.githubusercontent.com/coollabsio/coolify/v4.x/openapi.json`.
+
 Current implemented resource groups:
 
 - `applications`
@@ -119,6 +121,7 @@ Current implemented resource groups:
 - `servers`
 - `deployments`
 - `teams`
+- `githubApps`
 
 ### Application config structure
 

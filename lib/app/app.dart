@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../api/coolify_api.dart';
+import '../core/services/app_shell_service.dart';
 import '../core/services/credentials_service.dart';
 import '../core/services/preferences_service.dart';
 import '../pages/home/index.dart';
@@ -41,8 +42,7 @@ class _CoolifyAppState extends State<CoolifyApp> {
       home: _SonnerShell(
         child: Builder(
           builder: (context) {
-            final isDark =
-                ShadTheme.of(context).brightness == Brightness.dark;
+            final isDark = ShadTheme.of(context).brightness == Brightness.dark;
             final bgColor = ShadTheme.of(context).colorScheme.background;
             return Theme(
               data: Theme.of(context).copyWith(
@@ -234,6 +234,11 @@ class _RootGateState extends State<_RootGate> {
       ),
       _GateState.home => HomePage(
         onThemeModeChanged: widget.onThemeModeChanged,
+        onLogout: () async {
+          await CredentialsService.instance.clear();
+          AppShellService.instance.setActiveItem(AppSidebarItem.dashboard);
+          await _check();
+        },
       ),
     };
   }
