@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../api/coolify_api.dart';
 import '../../components/app_page_header.dart';
 import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
@@ -104,9 +105,15 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
   };
 
   static const _advancedEditKeys = {
-    'is_public', 'public_port', 'public_port_timeout',
-    'limits_memory', 'limits_memory_swap', 'limits_memory_swappiness',
-    'limits_memory_reservation', 'limits_cpus', 'limits_cpuset',
+    'is_public',
+    'public_port',
+    'public_port_timeout',
+    'limits_memory',
+    'limits_memory_swap',
+    'limits_memory_swappiness',
+    'limits_memory_reservation',
+    'limits_cpus',
+    'limits_cpuset',
     'limits_cpu_shares',
   };
 
@@ -216,11 +223,23 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
     ],
   };
 
-  List<_DatabaseFieldDefinition> get _createFields => [
-    ..._commonCreateFields,
-    ..._commonPatchFields,
-    ..._serviceFields[widget.serviceType]!,
-  ];
+  /// Fields the create endpoint of an engine does not accept (it generates
+  /// them); they can only be edited afterwards. See docs/openapi.json.
+  static const _createUnsupportedKeys = <DatabaseServiceType, Set<String>>{
+    DatabaseServiceType.mongodb: {
+      'mongo_initdb_root_password',
+      'mongo_initdb_database',
+    },
+  };
+
+  List<_DatabaseFieldDefinition> get _createFields {
+    final unsupported = _createUnsupportedKeys[widget.serviceType] ?? const {};
+    return [
+      ..._commonCreateFields,
+      ..._commonPatchFields,
+      ..._serviceFields[widget.serviceType]!,
+    ].where((field) => !unsupported.contains(field.key)).toList();
+  }
 
   List<_DatabaseFieldDefinition> get _editFields => [
     ..._commonPatchFields,
@@ -298,7 +317,7 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final database = await api.databases.get(widget.databaseUuid!);
+      final database = await api.getDatabase(widget.databaseUuid!);
       for (final field in _editFields) {
         final value = database.rawJson[field.key];
         if (field.type == _DatabaseFieldType.boolean) {
@@ -311,10 +330,10 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
       setState(() {});
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load database',
       );
     } finally {
@@ -342,21 +361,73 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
 
       final api = await CoolifyClientService.createClient();
       if (widget.isEditing) {
-        await api.databases.update(widget.databaseUuid!, body: body);
+        await api.databases.updateDatabaseByUuid(
+          widget.databaseUuid!,
+          requestFromMap(
+            body,
+            UpdateDatabaseByUuidRequest.fromJson,
+            (request) => request.toJson(),
+          ),
+        );
       } else {
+        final databases = api.databases;
         await switch (widget.serviceType) {
-          DatabaseServiceType.postgresql => api.databases.postgresql.create(
-            body,
+          DatabaseServiceType.postgresql => databases.createDatabasePostgresql(
+            requestFromMap(
+              body,
+              CreateDatabasePostgresqlRequest.fromJson,
+              (request) => request.toJson(),
+            ),
           ),
-          DatabaseServiceType.clickhouse => api.databases.clickhouse.create(
-            body,
+          DatabaseServiceType.clickhouse => databases.createDatabaseClickhouse(
+            requestFromMap(
+              body,
+              CreateDatabaseClickhouseRequest.fromJson,
+              (request) => request.toJson(),
+            ),
           ),
-          DatabaseServiceType.dragonfly => api.databases.dragonfly.create(body),
-          DatabaseServiceType.redis => api.databases.redis.create(body),
-          DatabaseServiceType.keydb => api.databases.keydb.create(body),
-          DatabaseServiceType.mariadb => api.databases.mariadb.create(body),
-          DatabaseServiceType.mysql => api.databases.mysql.create(body),
-          DatabaseServiceType.mongodb => api.databases.mongodb.create(body),
+          DatabaseServiceType.dragonfly => databases.createDatabaseDragonfly(
+            requestFromMap(
+              body,
+              CreateDatabaseDragonflyRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
+          DatabaseServiceType.redis => databases.createDatabaseRedis(
+            requestFromMap(
+              body,
+              CreateDatabaseRedisRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
+          DatabaseServiceType.keydb => databases.createDatabaseKeydb(
+            requestFromMap(
+              body,
+              CreateDatabaseKeydbRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
+          DatabaseServiceType.mariadb => databases.createDatabaseMariadb(
+            requestFromMap(
+              body,
+              CreateDatabaseMariadbRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
+          DatabaseServiceType.mysql => databases.createDatabaseMysql(
+            requestFromMap(
+              body,
+              CreateDatabaseMysqlRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
+          DatabaseServiceType.mongodb => databases.createDatabaseMongodb(
+            requestFromMap(
+              body,
+              CreateDatabaseMongodbRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
         };
       }
 
@@ -368,7 +439,7 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Save failed');
+      AppToast.error(context, apiErrorMessage(error), title: 'Save failed');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -407,11 +478,19 @@ class _DatabaseFormPageState extends State<DatabaseFormPage> {
                           setState(() => _section = value);
                         },
                         options: const [
-                          ShadOption(value: _DatabaseSection.general, child: Text('General')),
-                          ShadOption(value: _DatabaseSection.advanced, child: Text('Advanced')),
+                          ShadOption(
+                            value: _DatabaseSection.general,
+                            child: Text('General'),
+                          ),
+                          ShadOption(
+                            value: _DatabaseSection.advanced,
+                            child: Text('Advanced'),
+                          ),
                         ],
                         selectedOptionBuilder: (context, value) => Text(
-                          value == _DatabaseSection.general ? 'General' : 'Advanced',
+                          value == _DatabaseSection.general
+                              ? 'General'
+                              : 'Advanced',
                         ),
                       ),
                     ),

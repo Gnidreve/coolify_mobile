@@ -125,8 +125,8 @@ class AppShellService {
     final results = await Future.wait<String?>([
       api.defaultApi.version().then<String?>((v) => v).catchError((_) => null),
       api.teams
-          .authenticated()
-          .then<String?>((t) => t.name)
+          .getTokenTeam()
+          .then<String?>((t) => t?.name)
           .catchError((_) => null),
     ]);
 

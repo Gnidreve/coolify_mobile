@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../api/coolify_api.dart';
-import '../../api/core/api_exception.dart';
 import '../../components/resource_card.dart';
 import '../../components/state_views.dart';
 import '../../core/services/app_toast.dart';
@@ -18,9 +17,9 @@ class _RecentDeployment {
   const _RecentDeployment(this.applicationName, this.deployment);
 
   final String applicationName;
-  final DeploymentResource deployment;
+  final ApplicationDeploymentQueue deployment;
 
-  DateTime? get createdAt => DateTime.tryParse(deployment.createdAt);
+  DateTime? get createdAt => DateTime.tryParse(deployment.createdAtOrEmpty);
 }
 
 class DashboardPage extends StatefulWidget {
@@ -51,18 +50,19 @@ class _DashboardPageState extends State<DashboardPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final applications = await api.applications.list();
+      final applications =
+          await api.applications.listApplications() ?? const <Application>[];
 
       var failures = 0;
       final perApplication = await Future.wait(
         applications.map((application) async {
           try {
-            final deployments = await api.deployments.listForApplication(
-              application.uuid,
+            final deployments = await api.listApplicationDeployments(
+              application.uuidOrEmpty,
               take: _recentDeploymentCount,
             );
             return deployments
-                .map((d) => _RecentDeployment(application.name, d))
+                .map((d) => _RecentDeployment(application.displayName, d))
                 .toList();
           } catch (_) {
             failures++;
@@ -72,7 +72,7 @@ class _DashboardPageState extends State<DashboardPage> {
       );
 
       if (applications.isNotEmpty && failures == applications.length) {
-        throw const ApiException('Could not load deployments.');
+        throw ApiException(0, 'Could not load deployments.');
       }
 
       final recent = perApplication.expand((list) => list).toList()
@@ -87,10 +87,10 @@ class _DashboardPageState extends State<DashboardPage> {
       setState(() => _recent = recent.take(_recentDeploymentCount).toList());
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load deployments',
       );
     } finally {
@@ -102,7 +102,7 @@ class _DashboardPageState extends State<DashboardPage> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ApplicationDeploymentDetailsPage(
-          deploymentUuid: item.deployment.deploymentUuid,
+          deploymentUuid: item.deployment.deploymentUuid ?? '',
           parentCrumbs: const ['Dashboard', 'Deployment'],
         ),
       ),
@@ -137,12 +137,12 @@ class _DashboardPageState extends State<DashboardPage> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: ResourceCard(
                   title: item.applicationName,
-                  subtitle: item.deployment.commitMessage.isEmpty
+                  subtitle: item.deployment.commitMessageOrEmpty.isEmpty
                       ? 'No commit message'
-                      : item.deployment.commitMessage,
-                  tertiary: relativeTime(item.deployment.createdAt),
+                      : item.deployment.commitMessageOrEmpty,
+                  tertiary: relativeTime(item.deployment.createdAtOrEmpty),
                   trailing: DeploymentStatusBadge(
-                    status: item.deployment.status,
+                    status: item.deployment.statusOrEmpty,
                   ),
                   showChevron: false,
                   onTap: () => _openDeployment(item),

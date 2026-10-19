@@ -23,6 +23,8 @@ dependencies:
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10
   flutter_native_splash: ^2.4.3
+  coolify_api:
+    path: packages/coolify_api
   url_launcher: ^6.3.3
   ota_update: ^7.1.0
   package_info_plus: ^9.0.1

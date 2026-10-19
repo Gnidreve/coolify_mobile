@@ -7,7 +7,7 @@ import '../../core/services/app_toast.dart';
 class ApplicationConfigDangerZonePage extends StatelessWidget {
   const ApplicationConfigDangerZonePage({super.key, required this.application});
 
-  final ApplicationResource application;
+  final ApplicationDetails application;
 
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -15,9 +15,7 @@ class ApplicationConfigDangerZonePage extends StatelessWidget {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete application'),
-          content: Text(
-            'This will permanently delete ${application.name}.',
-          ),
+          content: Text('This will permanently delete ${application.name}.'),
           actions: [
             ShadButton.outline(
               onPressed: () => Navigator.of(dialogContext).pop(false),

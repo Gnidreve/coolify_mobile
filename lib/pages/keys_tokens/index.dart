@@ -19,7 +19,7 @@ class KeysTokensPage extends StatefulWidget {
 class KeysTokensPageState extends State<KeysTokensPage> {
   bool _loading = true;
   String? _error;
-  List<PrivateKeyResource> _keys = const [];
+  List<PrivateKey> _keys = const [];
 
   @override
   void initState() {
@@ -35,15 +35,16 @@ class KeysTokensPageState extends State<KeysTokensPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final keys = await api.security.keys.list();
+      final keys =
+          await api.privateKeys.listPrivateKeys() ?? const <PrivateKey>[];
       if (!mounted) return;
       setState(() => _keys = keys);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load private keys',
       );
     } finally {
@@ -93,22 +94,26 @@ class KeysTokensPageState extends State<KeysTokensPage> {
     );
   }
 
-  String _displayTitle(PrivateKeyResource item) {
-    if (item.name.trim().isNotEmpty) {
-      return item.name.trim();
+  String _displayTitle(PrivateKey item) {
+    final name = (item.name ?? '').trim();
+    final fingerprint = (item.fingerprint ?? '').trim();
+    final publicKey = (item.publicKey ?? '').trim();
+    if (name.isNotEmpty) {
+      return name;
     }
-    if (item.fingerprint.trim().isNotEmpty) {
-      return item.fingerprint.trim();
+    if (fingerprint.isNotEmpty) {
+      return fingerprint;
     }
-    if (item.publicKey.trim().isNotEmpty) {
-      return item.publicKey.trim().split('\n').first;
+    if (publicKey.isNotEmpty) {
+      return publicKey.split('\n').first;
     }
     return 'Unnamed key';
   }
 
-  String _displaySubtitle(PrivateKeyResource item) {
-    if (item.description.trim().isNotEmpty) {
-      return item.description.trim();
+  String _displaySubtitle(PrivateKey item) {
+    final description = (item.description ?? '').trim();
+    if (description.isNotEmpty) {
+      return description;
     }
     return '';
   }
@@ -178,21 +183,23 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final key = await api.security.keys.get(widget.uuid!);
+      final key = await api.privateKeys.getPrivateKeyByUuid(widget.uuid!);
+      final keyName = key?.name ?? '';
+      final keyDescription = key?.description ?? '';
       _initial = {
-        'name': key.name,
-        'description': key.description,
+        'name': keyName,
+        'description': keyDescription,
         'private_key': '',
       };
-      _nameController.text = key.name;
-      _descriptionController.text = key.description;
+      _nameController.text = keyName;
+      _descriptionController.text = keyDescription;
       // Private key is write-only — not pre-populated
     } catch (error) {
-      _error = error.toString();
+      _error = apiErrorMessage(error);
       if (mounted) {
         AppToast.error(
           context,
-          error.toString(),
+          apiErrorMessage(error),
           title: 'Could not load private key',
         );
       }
@@ -222,17 +229,21 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
     try {
       final api = await CoolifyClientService.createClient();
       if (widget.isEditing) {
-        await api.security.keys.update(
+        await api.privateKeys.updatePrivateKey(
           widget.uuid!,
-          name: name,
-          description: description,
-          privateKey: privateKey.isEmpty ? null : privateKey,
+          UpdatePrivateKeyRequest(
+            name: name,
+            description: description,
+            privateKey: privateKey.isEmpty ? null : privateKey,
+          ),
         );
       } else {
-        await api.security.keys.create(
-          name: name,
-          description: description,
-          privateKey: privateKey,
+        await api.privateKeys.createPrivateKey(
+          CreatePrivateKeyRequest(
+            name: name,
+            description: description,
+            privateKey: privateKey,
+          ),
         );
       }
 
@@ -244,7 +255,7 @@ class _PrivateKeyEditorPageState extends State<_PrivateKeyEditorPage> {
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Save failed');
+      AppToast.error(context, apiErrorMessage(error), title: 'Save failed');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

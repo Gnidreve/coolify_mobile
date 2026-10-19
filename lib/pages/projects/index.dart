@@ -21,7 +21,7 @@ class ProjectsPage extends StatefulWidget {
 class ProjectsPageState extends State<ProjectsPage> {
   bool _loading = true;
   String? _error;
-  List<ProjectSummary> _projects = const [];
+  List<Project> _projects = const [];
 
   @override
   void initState() {
@@ -37,15 +37,15 @@ class ProjectsPageState extends State<ProjectsPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final projects = await api.projects.list();
+      final projects = await api.projects.listProjects() ?? const <Project>[];
       if (!mounted) return;
       setState(() => _projects = projects);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load projects',
       );
     } finally {
@@ -53,10 +53,12 @@ class ProjectsPageState extends State<ProjectsPage> {
     }
   }
 
-  Future<void> _openProject(ProjectSummary project) async {
+  Future<void> _openProject(Project project) async {
     try {
       final api = await CoolifyClientService.createClient();
-      final environments = await api.projects.listEnvironments(project.uuid);
+      final environments =
+          await api.projects.getEnvironments(project.uuid ?? '') ??
+          const <Environment>[];
       if (!mounted) return;
 
       // temporarily disabled: auto-skip to single environment on project tap
@@ -85,7 +87,7 @@ class ProjectsPageState extends State<ProjectsPage> {
       if (!mounted) return;
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not open project',
       );
     }
@@ -94,9 +96,9 @@ class ProjectsPageState extends State<ProjectsPage> {
   void openAdd() => _openCreateProject();
 
   Future<void> _openCreateProject() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const CreateProjectPage()),
-    );
+    final created = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const CreateProjectPage()));
     if (created == true) _load();
   }
 
@@ -117,8 +119,8 @@ class ProjectsPageState extends State<ProjectsPage> {
           (project) => Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: ResourceCard(
-              title: project.name,
-              subtitle: project.description,
+              title: project.displayName,
+              subtitle: project.descriptionOrEmpty,
               onTap: () => _openProject(project),
             ),
           ),
@@ -134,8 +136,8 @@ class _ProjectEnvironmentsPage extends StatefulWidget {
     this.initialEnvironments,
   });
 
-  final ProjectSummary project;
-  final List<ProjectEnvironment>? initialEnvironments;
+  final Project project;
+  final List<Environment>? initialEnvironments;
 
   @override
   State<_ProjectEnvironmentsPage> createState() =>
@@ -145,8 +147,7 @@ class _ProjectEnvironmentsPage extends StatefulWidget {
 class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
   late bool _loading = widget.initialEnvironments == null;
   String? _error;
-  late List<ProjectEnvironment> _environments =
-      widget.initialEnvironments ?? const [];
+  late List<Environment> _environments = widget.initialEnvironments ?? const [];
   bool _creatingEnvironment = false;
 
   @override
@@ -165,17 +166,17 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final environments = await api.projects.listEnvironments(
-        widget.project.uuid,
-      );
+      final environments =
+          await api.projects.getEnvironments(widget.project.uuid ?? '') ??
+          const <Environment>[];
       if (!mounted) return;
       setState(() => _environments = environments);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load environments',
       );
     } finally {
@@ -183,12 +184,12 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
     }
   }
 
-  Future<void> _openEnvironment(ProjectEnvironment environment) async {
+  Future<void> _openEnvironment(Environment environment) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProjectEnvironmentResourcesPage(
-          projectName: widget.project.name,
-          projectUuid: widget.project.uuid,
+          projectName: widget.project.displayName,
+          projectUuid: widget.project.uuid ?? '',
           environment: environment,
         ),
       ),
@@ -217,8 +218,8 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
               try {
                 final api = await CoolifyClientService.createClient();
                 await api.projects.createEnvironment(
-                  projectUuid: widget.project.uuid,
-                  name: name,
+                  widget.project.uuid ?? '',
+                  CreateEnvironmentRequest(name: name),
                 );
                 if (!mounted || !dialogContext.mounted) return;
                 Navigator.of(dialogContext).pop(true);
@@ -227,7 +228,7 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
                 if (!mounted) return;
                 AppToast.error(
                   context,
-                  error.toString(),
+                  apiErrorMessage(error),
                   title: 'Could not create environment',
                 );
               } finally {
@@ -295,10 +296,12 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
     return Scaffold(
       drawer: const AppSidebarDrawer(),
       appBar: AppPageHeader(
-        crumbs: ['Projects', widget.project.name],
+        crumbs: ['Projects', widget.project.displayName],
         actions: [
           IconButton(
-            onPressed: _creatingEnvironment ? null : _openCreateEnvironmentDialog,
+            onPressed: _creatingEnvironment
+                ? null
+                : _openCreateEnvironmentDialog,
             icon: const Icon(LucideIcons.plus),
           ),
           const SizedBox(width: 8),
@@ -317,13 +320,11 @@ class _ProjectEnvironmentsPageState extends State<_ProjectEnvironmentsPage> {
                 itemBuilder: (context, index) {
                   final environment = _environments[index];
                   return ResourceCard(
-                    title: environment.name,
-                    subtitle: environment.description,
+                    title: environment.displayName,
+                    subtitle: environment.description ?? '',
                     onTap: () => _openEnvironment(environment),
                     trailing: Text(
-                      environment.updatedAt.isEmpty
-                          ? ''
-                          : environment.updatedAt,
+                      environment.updatedAt ?? '',
                       style: ShadTheme.of(context).textTheme.small,
                     ),
                   );

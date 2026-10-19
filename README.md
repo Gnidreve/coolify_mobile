@@ -45,19 +45,10 @@ A Flutter mobile app for managing your [Coolify](https://coolify.io) self-hostin
 
 ```
 lib/
-├── api/                         # Coolify SDK (domain-based, bundled per resource)
-│   ├── applications/           # GET/PATCH /applications, logs, lifecycle actions
-│   ├── core/                   # BaseApiClient, ApiException, response readers
-│   ├── databases/              # GET/PATCH/DELETE /databases + typed create APIs
-│   ├── default/                # default/version endpoints
-│   ├── deployments/            # deployments and application deployments
-│   ├── health/                 # GET /api/health
-│   ├── projects/               # projects and environments
-│   ├── resources/              # generic resources listing
-│   ├── security/               # private keys
-│   ├── servers/                # servers CRUD
-│   ├── teams/                  # teams endpoints
-│   └── coolify_api.dart        # Main entrypoint: CoolifyApi
+├── api/                         # CoolifyApi facade + helpers around the generated client
+│   ├── coolify_api.dart        # Entry point: CoolifyApi (wires auth, timeout, base URL)
+│   ├── api_support.dart        # Error messages, JSON helpers, requestFromMap
+│   └── app_models.dart         # Display helpers on generated models, DatabaseResource
 ├── app/
 │   └── app.dart                 # Root widget, theme setup, RootGate (login vs. home)
 ├── assets/                      # Static assets (SVGs, images, bundled fonts)
@@ -76,7 +67,8 @@ lib/
 │   ├── databases/              # Dedicated pages per database type
 │   ├── login/
 │   ├── home/                   # Shell with sidebar drawer
-│   ├── deployments/
+│   ├── dashboard/              # Recent deployments
+│   ├── update/                 # Blocking update screen
 │   ├── projects/               # Project/application pages, including split config sections
 │   ├── servers/
 │   ├── notifications/
@@ -89,39 +81,41 @@ lib/
 └── theme.dart                   # Central shadcn_ui theme config + Geist Sans
 ```
 
-### SDK usage
+### API client
 
-The Coolify API is wrapped in a lightweight SDK under `lib/api/`. Each resource group maps to a domain class, accessed via dot notation:
+The Coolify API client is **generated** from the OpenAPI spec in `docs/openapi.json`
+(`packages/coolify_api`, committed). `lib/api/coolify_api.dart` wires it to one instance:
 
 ```dart
 final coolify = CoolifyApi(baseUrl: '...', apiToken: '...');
-await coolify.applications.list();
-await coolify.databases.list();
-await coolify.defaultApi.version();
-await coolify.health.check();
-await coolify.projects.list();
-await coolify.resources.list();
-await coolify.security.keys.list();
-await coolify.servers.list();
-await coolify.deployments.list();
-await coolify.teams.list();
+await coolify.applications.listApplications();
+await coolify.projects.getEnvironments(projectUuid);
+await coolify.applications.startApplicationByUuid(uuid);
 ```
 
-The full, current Coolify OpenAPI spec lives in `docs/openapi.json` (fetched from `coollabsio/coolify`, branch `v4.x`, 2026-10-19). Refresh it from `https://raw.githubusercontent.com/coollabsio/coolify/v4.x/openapi.json`.
+All 291 operations of the spec are available. Regenerate after updating the spec (needs Java 11+
+and python3):
 
-Current implemented resource groups:
+```bash
+curl -fsSL https://raw.githubusercontent.com/coollabsio/coolify/v4.x/openapi.json -o docs/openapi.json
+./tool/generate_api.sh
+```
 
-- `applications`
-- `databases`
-- `defaultApi`
-- `health`
-- `projects`
-- `resources`
-- `security.keys`
-- `servers`
-- `deployments`
-- `teams`
-- `githubApps`
+`tool/prepare_spec.py` fixes what the generator cannot digest or what the spec gets wrong
+(OpenAPI 3.1 → 3.0, a few untyped schemas, missing `Environment.uuid`, wrong response of
+`/deployments/applications/{uuid}`, required `private_key` on key update). Every fix is
+commented there; check them when the spec changes.
+
+Things to know when using the generated client:
+
+- The spec marks almost every field optional, so model fields are nullable. Use the
+  extensions in `app_models.dart` (`displayName`, `statusOrEmpty`, …) in the UI.
+- Some responses are mistyped in the spec (`/databases` is a "string"). These are decoded by hand
+  in `CoolifyApi` (`listDatabases`, `listApplicationDeployments`, …).
+- Forms assemble request bodies as maps. Build the request with `requestFromMap`, which throws
+  if the generated model would drop a field, and the client sends exactly that map. A generated
+  `toJson` alone would send every unset field as `null`, and a PATCH would clear it.
+- Errors: `apiErrorMessage(error)` turns an `ApiException` into the server's message.
 
 ### Application config structure
 
@@ -129,6 +123,7 @@ Current implemented resource groups:
 - `General`, `Git`, `Health Checks`, `Advanced`, and `Danger Zone` each live in their own page file
 - Shared field rendering / PATCH handling is centralized in `application_config_section_editor.dart`
 - Field grouping is hard-coded in `application_config_schema.dart`
+- Saving sends only the fields the user changed
 
 ---
 

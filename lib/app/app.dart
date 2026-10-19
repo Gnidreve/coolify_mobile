@@ -217,13 +217,13 @@ class _RootGateState extends State<_RootGate> {
 
     try {
       final api = CoolifyApi(baseUrl: baseUrl!, apiToken: apiToken!);
-      final isUp = await api.health.check();
+      final isUp = await api.isHealthy();
       if (!mounted) return;
       setState(() => _state = isUp ? _GateState.home : _GateState.healthError);
     } catch (error) {
       if (mounted) {
         setState(() {
-          _healthErrorMessage = error.toString();
+          _healthErrorMessage = apiErrorMessage(error);
           _state = _GateState.healthError;
         });
       }

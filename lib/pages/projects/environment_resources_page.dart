@@ -23,7 +23,7 @@ class ProjectEnvironmentResourcesPage extends StatefulWidget {
 
   final String projectName;
   final String projectUuid;
-  final ProjectEnvironment environment;
+  final Environment environment;
 
   @override
   State<ProjectEnvironmentResourcesPage> createState() =>
@@ -34,7 +34,7 @@ class _ProjectEnvironmentResourcesPageState
     extends State<ProjectEnvironmentResourcesPage> {
   bool _loading = true;
   String? _error;
-  List<ApplicationResource> _applications = const [];
+  List<Application> _applications = const [];
   List<DatabaseResource> _databases = const [];
 
   @override
@@ -51,8 +51,9 @@ class _ProjectEnvironmentResourcesPageState
 
     try {
       final api = await CoolifyClientService.createClient();
-      final applications = await api.applications.list();
-      final databases = await api.databases.list();
+      final applications =
+          await api.applications.listApplications() ?? const <Application>[];
+      final databases = await api.listDatabases();
       final filtered = applications
           .where((item) => item.environmentId == widget.environment.id)
           .toList();
@@ -66,10 +67,10 @@ class _ProjectEnvironmentResourcesPageState
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load environment resources',
       );
     } finally {
@@ -77,16 +78,16 @@ class _ProjectEnvironmentResourcesPageState
     }
   }
 
-  Future<void> _openApplication(ApplicationResource application) async {
+  Future<void> _openApplication(Application application) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ApplicationDetailsPage(
-          applicationUuid: application.uuid,
-          fallbackTitle: application.name,
+          applicationUuid: application.uuidOrEmpty,
+          fallbackTitle: application.displayName,
           parentCrumbs: [
             'Projects',
             widget.projectName,
-            widget.environment.name,
+            widget.environment.displayName,
           ],
         ),
       ),
@@ -112,8 +113,8 @@ class _ProjectEnvironmentResourcesPageState
     final databaseContext = DatabaseContext(
       projectName: widget.projectName,
       projectUuid: widget.projectUuid,
-      environmentUuid: widget.environment.uuid,
-      environmentName: widget.environment.name,
+      environmentUuid: widget.environment.uuid ?? '',
+      environmentName: widget.environment.displayName,
     );
 
     final serviceType = DatabaseServiceType.fromApiValue(database.serviceType);
@@ -177,7 +178,11 @@ class _ProjectEnvironmentResourcesPageState
     return Scaffold(
       drawer: const AppSidebarDrawer(),
       appBar: AppPageHeader(
-        crumbs: ['Projects', widget.projectName, widget.environment.name],
+        crumbs: [
+          'Projects',
+          widget.projectName,
+          widget.environment.displayName,
+        ],
         actions: [
           IconButton(
             onPressed: _openCreateResource,
@@ -206,9 +211,11 @@ class _ProjectEnvironmentResourcesPageState
                       (application) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: ResourceCard(
-                          title: application.name,
-                          subtitle: application.fqdn,
-                          statusColor: resourceStatusColor(application.status),
+                          title: application.displayName,
+                          subtitle: application.fqdnOrEmpty,
+                          statusColor: resourceStatusColor(
+                            application.statusOrEmpty,
+                          ),
                           showChevron: false,
                           leading: ResourceCardAssetIcon(
                             assetDirectory: 'lib/assets/applications',

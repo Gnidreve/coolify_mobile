@@ -28,6 +28,7 @@ class ApplicationDetailsPage extends StatefulWidget {
 
   final String applicationUuid;
   final String fallbackTitle;
+
   /// Breadcrumb labels for all ancestor pages, e.g. ['Projects', 'My Project', 'production'].
   final List<String> parentCrumbs;
 
@@ -38,7 +39,7 @@ class ApplicationDetailsPage extends StatefulWidget {
 class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
   bool _loading = true;
   String? _error;
-  ApplicationResource? _application;
+  ApplicationDetails? _application;
   String _topTab = 'Config';
   String _section = 'General';
 
@@ -67,15 +68,17 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final application = await api.applications.get(widget.applicationUuid);
+      final application = await api.getApplicationDetails(
+        widget.applicationUuid,
+      );
       if (!mounted) return;
       setState(() => _application = application);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load application',
       );
     } finally {
@@ -90,7 +93,10 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
     return Scaffold(
       drawer: const AppSidebarDrawer(),
       appBar: AppPageHeader(
-        crumbs: [...widget.parentCrumbs, application?.name ?? widget.fallbackTitle],
+        crumbs: [
+          ...widget.parentCrumbs,
+          application?.name ?? widget.fallbackTitle,
+        ],
         actions: application == null
             ? null
             : [
@@ -155,11 +161,11 @@ class _ApplicationDetailsPageState extends State<ApplicationDetailsPage> {
     );
   }
 
-  void _handleApplicationUpdated(ApplicationResource application) {
+  void _handleApplicationUpdated(ApplicationDetails application) {
     setState(() => _application = application);
   }
 
-  Widget _buildContent(ApplicationResource application) {
+  Widget _buildContent(ApplicationDetails application) {
     switch (_topTab) {
       case 'Deployments':
         return ApplicationDeploymentsPage(

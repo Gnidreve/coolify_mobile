@@ -60,7 +60,7 @@ class _LoginPageState extends State<LoginPage> {
       final baseUrl = normalizeBaseUrl(uri.toString())!;
 
       final api = CoolifyApi(baseUrl: baseUrl, apiToken: token);
-      final isUp = await api.health.check();
+      final isUp = await api.isHealthy();
       if (!isUp) {
         if (mounted) {
           AppToast.error(

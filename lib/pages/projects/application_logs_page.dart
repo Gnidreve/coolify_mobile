@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../api/coolify_api.dart';
 import '../../core/services/app_toast.dart';
 import '../../core/services/coolify_client_service.dart';
 import '../../components/state_views.dart';
@@ -38,13 +39,20 @@ class _ApplicationLogsPageState extends State<ApplicationLogsPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final logs = await api.applications.logs(widget.applicationUuid);
+      final response = await api.applications.getApplicationLogsByUuid(
+        widget.applicationUuid,
+        lines: '500',
+      );
       if (!mounted) return;
-      setState(() => _logs = logs);
+      setState(() => _logs = response?.logs ?? '');
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
-      AppToast.error(context, error.toString(), title: 'Could not load logs');
+      setState(() => _error = apiErrorMessage(error));
+      AppToast.error(
+        context,
+        apiErrorMessage(error),
+        title: 'Could not load logs',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

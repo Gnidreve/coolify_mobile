@@ -64,3 +64,6 @@ AGENTS.md
 android/key.properties
 *.jks
 *.keystore
+
+# Generator cache
+tool/.cache/
