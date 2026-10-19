@@ -1,0 +1,89 @@
+name: Release
+
+# Manual trigger only. Builds a signed APK and replaces the rolling `latest`
+# release, whose version.json the app checks on startup.
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Release notes shown in the in-app update dialog
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.x
+          cache: true
+
+      - name: Prepare signing and .env
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then echo "::error::Missing secret for $v"; exit 1; fi
+          done
+          echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
+          cat > android/key.properties <<EOF
+          storeFile=release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          # pubspec lists .env as an asset; it is gitignored.
+          touch .env
+
+      - run: flutter pub get
+
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+      - name: Build APK
+        env:
+          NOTES: ${{ github.event.inputs.notes }}
+        run: |
+          # Unix time keeps the version code strictly increasing across runs.
+          BUILD=$(date +%s)
+          NAME=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          flutter build apk --release --build-number="$BUILD" --build-name="$NAME"
+          cp build/app/outputs/flutter-apk/app-release.apk coolify_mobile.apk
+          SHA=$(sha256sum coolify_mobile.apk | cut -d' ' -f1)
+          jq -n \
+            --arg version "$NAME" --argjson build "$BUILD" \
+            --arg apk "coolify_mobile.apk" --arg sha256 "$SHA" \
+            --arg notes "$NOTES" \
+            '{version:$version, build:$build, apk:$apk, sha256:$sha256, notes:$notes}' \
+            > version.json
+          cat version.json
+
+      - name: Replace rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest coolify_mobile.apk version.json \
+            --target "${{ github.sha }}" \
+            --title "Latest build" \
+            --notes "Rolling release, replaced on every run. Used by the in-app updater." \
+            --latest

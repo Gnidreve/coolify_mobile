@@ -59,3 +59,8 @@ Thumbs.db
 
 # Project-specific local docs / instructions
 AGENTS.md
+
+# Android release signing
+android/key.properties
+*.jks
+*.keystore

@@ -132,6 +132,47 @@ Current implemented resource groups:
 
 ---
 
+## Auto-Update (Android)
+
+On every start the app checks `version.json` of the rolling GitHub release `latest`
+(`releases/download/latest/version.json`) while showing a loading indicator. If its `build`
+is higher than the installed version code, a blocking "Update required" screen downloads the
+APK, verifies its SHA-256 and opens the Android installer. If the check fails (offline, 404,
+invalid JSON) the app simply starts. The check is skipped on iOS and in debug builds.
+
+`version.json`:
+
+```json
+{ "version": "1.0.0", "build": 1792400936, "apk": "coolify_mobile.apk", "sha256": "…", "notes": "…" }
+```
+
+### Publishing a release
+
+Run the **Release** workflow manually (Actions → Release → *Run workflow*, optional notes).
+It builds a signed APK, deletes the existing `latest` release and recreates it with
+`coolify_mobile.apk` and `version.json`. The version name comes from `pubspec.yaml`; the
+build number is the Unix timestamp of the run, so it always increases.
+
+### One-time setup
+
+Updates only install over an existing app if every APK is signed with the **same key**.
+
+```bash
+keytool -genkeypair -v -keystore release.jks -alias coolify -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 release.jks   # value for ANDROID_KEYSTORE_BASE64
+```
+
+Repository secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Keep `release.jks` backed up — losing it means
+users must uninstall before they can update. For local release builds create
+`android/key.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; gitignored);
+without it release builds fall back to the debug key.
+
+The first signed release must be installed manually once; builds signed with the old debug
+key cannot be updated in place.
+
+---
+
 ## Tech Stack
 
 | Concern         | Package                                                                                                                        |
