@@ -11,8 +11,8 @@ class ApplicationConfigAdvancedPage extends StatelessWidget {
     this.onUpdated,
   });
 
-  final ApplicationResource application;
-  final ValueChanged<ApplicationResource>? onUpdated;
+  final ApplicationDetails application;
+  final ValueChanged<ApplicationDetails>? onUpdated;
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -49,7 +51,7 @@ class ApplicationCreatePage extends StatefulWidget {
   final ApplicationCreateType type;
   final String projectUuid;
   final String projectName;
-  final ProjectEnvironment environment;
+  final Environment environment;
 
   @override
   State<ApplicationCreatePage> createState() => _ApplicationCreatePageState();
@@ -68,12 +70,23 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
     _ApplicationFieldDefinition('ports_exposes', _ApplicationFieldType.text),
   ];
 
+  /// Flags of the shared advanced section that the Dockerfile and Docker
+  /// image endpoints do not accept (see docs/openapi.json).
+  Set<String> get _unsupportedFlags => switch (widget.type) {
+    ApplicationCreateType.dockerfile ||
+    ApplicationCreateType.dockerImage => const {'is_static', 'is_spa'},
+    _ => const {},
+  };
+
   static const _gitFields = <_ApplicationFieldDefinition>[
     _ApplicationFieldDefinition('git_repository', _ApplicationFieldType.text),
     _ApplicationFieldDefinition('git_branch', _ApplicationFieldType.text),
     _ApplicationFieldDefinition('build_pack', _ApplicationFieldType.text),
     _ApplicationFieldDefinition('base_directory', _ApplicationFieldType.text),
-    _ApplicationFieldDefinition('publish_directory', _ApplicationFieldType.text),
+    _ApplicationFieldDefinition(
+      'publish_directory',
+      _ApplicationFieldType.text,
+    ),
   ];
 
   static const _privateGithubFields = <_ApplicationFieldDefinition>[
@@ -88,14 +101,6 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
 
   static const _dockerfileFields = <_ApplicationFieldDefinition>[
     _ApplicationFieldDefinition('dockerfile', _ApplicationFieldType.multiline),
-    _ApplicationFieldDefinition(
-      'dockerfile_location',
-      _ApplicationFieldType.text,
-    ),
-    _ApplicationFieldDefinition(
-      'dockerfile_target_build',
-      _ApplicationFieldType.text,
-    ),
   ];
 
   static const _dockerImageFields = <_ApplicationFieldDefinition>[
@@ -117,7 +122,10 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
   ];
 
   static const _advancedFields = <_ApplicationFieldDefinition>[
-    _ApplicationFieldDefinition('instant_deploy', _ApplicationFieldType.boolean),
+    _ApplicationFieldDefinition(
+      'instant_deploy',
+      _ApplicationFieldType.boolean,
+    ),
     _ApplicationFieldDefinition(
       'use_build_server',
       _ApplicationFieldType.boolean,
@@ -150,8 +158,8 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
   String? _error;
   _ApplicationCreateSection _section = _ApplicationCreateSection.general;
 
-  List<PrivateKeyResource> _privateKeys = const [];
-  List<GithubAppResource> _githubApps = const [];
+  List<PrivateKey> _privateKeys = const [];
+  List<ListGithubApps200ResponseInner> _githubApps = const [];
 
   List<_ApplicationFieldDefinition> get _sourceFields => switch (widget.type) {
     ApplicationCreateType.privateGithubApp => _privateGithubFields,
@@ -201,8 +209,8 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
     };
 
     _controllers['project_uuid']!.text = widget.projectUuid;
-    _controllers['environment_uuid']!.text = widget.environment.uuid;
-    _controllers['environment_name']!.text = widget.environment.name;
+    _controllers['environment_uuid']!.text = widget.environment.uuid ?? '';
+    _controllers['environment_name']!.text = widget.environment.displayName;
     _controllers['git_branch']!.text = 'main';
     _controllers['docker_registry_image_tag']!.text = 'latest';
     _loadLookups();
@@ -231,16 +239,51 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
     try {
       final api = await CoolifyClientService.createClient();
       if (needsPrivateKeys) {
-        _privateKeys = await api.security.keys.list();
+        _privateKeys =
+            await api.privateKeys.listPrivateKeys() ?? const <PrivateKey>[];
       }
       if (needsGithubApps) {
-        _githubApps = await api.githubApps.list();
+        _githubApps =
+            await api.githubApps.listGithubApps() ??
+            const <ListGithubApps200ResponseInner>[];
       }
     } catch (error) {
-      _error = error.toString();
+      _error = apiErrorMessage(error);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _githubAppLabel(ListGithubApps200ResponseInner app) {
+    final name = app.name ?? '';
+    final organization = app.organization ?? '';
+    return organization.isEmpty ? name : '$name ($organization)';
+  }
+
+  /// Fields `POST /services` accepts; the shared application form also has
+  /// domain and port fields that do not apply to a compose service.
+  static const _serviceFields = {
+    'project_uuid',
+    'environment_uuid',
+    'environment_name',
+    'server_uuid',
+    'destination_uuid',
+    'name',
+    'description',
+    'instant_deploy',
+    'connect_to_docker_network',
+    'force_domain_override',
+    'is_container_label_escape_enabled',
+  };
+
+  Map<String, dynamic> _composeServiceBody(Map<String, dynamic> body) {
+    return {
+      for (final entry in body.entries)
+        if (_serviceFields.contains(entry.key)) entry.key: entry.value,
+      'docker_compose_raw': base64Encode(
+        utf8.encode('${body['docker_compose_raw'] ?? ''}'),
+      ),
+    };
   }
 
   Future<void> _save() async {
@@ -305,6 +348,7 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
       }
     }
     for (final entry in _boolValues.entries) {
+      if (_unsupportedFlags.contains(entry.key)) continue;
       body[entry.key] = entry.value;
     }
 
@@ -312,19 +356,57 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
 
     try {
       final api = await CoolifyClientService.createClient();
+      final applications = api.applications;
       await switch (widget.type) {
         ApplicationCreateType.privateGithubApp =>
-          api.applications.createPrivateGithubApp(body: body),
+          applications.createPrivateGithubAppApplication(
+            requestFromMap(
+              body,
+              CreatePrivateGithubAppApplicationRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
         ApplicationCreateType.privateDeployKey =>
-          api.applications.createPrivateDeployKey(body: body),
+          applications.createPrivateDeployKeyApplication(
+            requestFromMap(
+              body,
+              CreatePrivateDeployKeyApplicationRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
         ApplicationCreateType.publicGithubApp =>
-          api.applications.createPublic(body: body),
+          applications.createPublicApplication(
+            requestFromMap(
+              body,
+              CreatePublicApplicationRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
         ApplicationCreateType.dockerfile =>
-          api.applications.createDockerfile(body: body),
+          applications.createDockerfileApplication(
+            requestFromMap(
+              body,
+              CreateDockerfileApplicationRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
         ApplicationCreateType.dockerImage =>
-          api.applications.createDockerImage(body: body),
-        ApplicationCreateType.dockerCompose =>
-          api.applications.createDockerCompose(body: body),
+          applications.createDockerimageApplication(
+            requestFromMap(
+              body,
+              CreateDockerimageApplicationRequest.fromJson,
+              (request) => request.toJson(),
+            ),
+          ),
+        // Coolify no longer has a Docker Compose application endpoint;
+        // compose stacks are services created from a base64 compose file.
+        ApplicationCreateType.dockerCompose => api.services.createService(
+          requestFromMap(
+            _composeServiceBody(body),
+            CreateServiceRequest.fromJson,
+            (request) => request.toJson(),
+          ),
+        ),
       };
 
       if (!mounted) return;
@@ -332,7 +414,7 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Create failed');
+      AppToast.error(context, apiErrorMessage(error), title: 'Create failed');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -346,7 +428,7 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
         crumbs: [
           'Projects',
           widget.projectName,
-          widget.environment.name,
+          widget.environment.displayName,
           'Add Resource',
           widget.type.title,
         ],
@@ -418,16 +500,20 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
             options: _privateKeys
                 .map(
                   (key) => ShadOption(
-                    value: key.uuid,
+                    value: key.uuid ?? '',
                     child: Text(
-                      key.name.isNotEmpty ? key.name : key.uuid,
+                      (key.name ?? '').isNotEmpty ? key.name! : key.uuid ?? '',
                     ),
                   ),
                 )
                 .toList(),
             selectedOptionBuilder: (context, value) {
-              final match = _privateKeys.where((key) => key.uuid == value).first;
-              return Text(match.name.isNotEmpty ? match.name : match.uuid);
+              final match = _privateKeys
+                  .where((key) => key.uuid == value)
+                  .first;
+              return Text(
+                (match.name ?? '').isNotEmpty ? match.name! : match.uuid ?? '',
+              );
             },
           ),
         ),
@@ -452,22 +538,14 @@ class _ApplicationCreatePageState extends State<ApplicationCreatePage> {
             options: _githubApps
                 .map(
                   (app) => ShadOption(
-                    value: app.uuid,
-                    child: Text(
-                      app.organization.isEmpty
-                          ? app.name
-                          : '${app.name} (${app.organization})',
-                    ),
+                    value: app.uuid ?? '',
+                    child: Text(_githubAppLabel(app)),
                   ),
                 )
                 .toList(),
             selectedOptionBuilder: (context, value) {
               final match = _githubApps.where((app) => app.uuid == value).first;
-              return Text(
-                match.organization.isEmpty
-                    ? match.name
-                    : '${match.name} (${match.organization})',
-              );
+              return Text(_githubAppLabel(match));
             },
           ),
         ),

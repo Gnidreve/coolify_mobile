@@ -71,7 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final api = CoolifyApi(baseUrl: url, apiToken: token);
-      final isUp = await api.health.check();
+      final isUp = await api.isHealthy();
 
       if (!mounted) return;
       if (isUp) {

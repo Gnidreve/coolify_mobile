@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../api/coolify_api.dart';
 import '../../components/app_page_header.dart';
 import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_toast.dart';
@@ -37,16 +38,22 @@ class _CreateProjectPageState extends State<CreateProjectPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      await api.projects.create(
-        name: name,
-        description: _descriptionController.text.trim(),
+      await api.projects.createProject(
+        CreateProjectRequest(
+          name: name,
+          description: _descriptionController.text.trim(),
+        ),
       );
       if (!mounted) return;
       AppToast.success(context, 'Project created.');
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Could not create project');
+      AppToast.error(
+        context,
+        apiErrorMessage(error),
+        title: 'Could not create project',
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

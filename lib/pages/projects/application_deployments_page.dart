@@ -16,7 +16,7 @@ class ApplicationDeploymentsPage extends StatefulWidget {
     this.parentCrumbs = const [],
   });
 
-  final ApplicationResource application;
+  final ApplicationDetails application;
   final List<String> parentCrumbs;
 
   @override
@@ -28,7 +28,7 @@ class _ApplicationDeploymentsPageState
     extends State<ApplicationDeploymentsPage> {
   bool _loading = true;
   String? _error;
-  List<DeploymentResource> _deployments = const [];
+  List<ApplicationDeploymentQueue> _deployments = const [];
 
   @override
   void initState() {
@@ -44,17 +44,17 @@ class _ApplicationDeploymentsPageState
 
     try {
       final api = await CoolifyClientService.createClient();
-      final deployments = await api.deployments.listForApplication(
+      final deployments = await api.listApplicationDeployments(
         widget.application.uuid,
       );
       if (!mounted) return;
       setState(() => _deployments = deployments);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load deployments',
       );
     } finally {
@@ -62,11 +62,11 @@ class _ApplicationDeploymentsPageState
     }
   }
 
-  Future<void> _openDeployment(DeploymentResource deployment) async {
+  Future<void> _openDeployment(ApplicationDeploymentQueue deployment) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ApplicationDeploymentDetailsPage(
-          deploymentUuid: deployment.deploymentUuid,
+          deploymentUuid: deployment.deploymentUuid ?? '',
           parentCrumbs: [...widget.parentCrumbs, 'Deployment'],
         ),
       ),
@@ -108,17 +108,17 @@ class _ApplicationDeploymentsPageState
             (deployment) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: ResourceCard(
-                title: deployment.status.isEmpty
+                title: deployment.statusOrEmpty.isEmpty
                     ? 'Deployment'
-                    : resourceStatusLabel(deployment.status),
-                subtitle: deployment.commitMessage.isEmpty
-                    ? deployment.serverName
-                    : deployment.commitMessage,
+                    : resourceStatusLabel(deployment.statusOrEmpty),
+                subtitle: deployment.commitMessageOrEmpty.isEmpty
+                    ? (deployment.serverName ?? '')
+                    : deployment.commitMessageOrEmpty,
                 trailing: Container(
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: resourceStatusColor(deployment.status),
+                    color: resourceStatusColor(deployment.statusOrEmpty),
                     shape: BoxShape.circle,
                   ),
                 ),

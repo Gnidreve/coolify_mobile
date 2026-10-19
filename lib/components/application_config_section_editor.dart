@@ -17,10 +17,10 @@ class ApplicationConfigSectionEditor extends StatefulWidget {
     this.onUpdated,
   });
 
-  final ApplicationResource application;
+  final ApplicationDetails application;
   final List<ApplicationConfigFieldDefinition> fields;
   final List<ApplicationConfigFieldGroup> groups;
-  final ValueChanged<ApplicationResource>? onUpdated;
+  final ValueChanged<ApplicationDetails>? onUpdated;
 
   List<ApplicationConfigFieldDefinition> get _effectiveFields =>
       groups.isNotEmpty ? groups.expand((g) => g.fields).toList() : fields;
@@ -32,10 +32,14 @@ class ApplicationConfigSectionEditor extends StatefulWidget {
 
 class _ApplicationConfigSectionEditorState
     extends State<ApplicationConfigSectionEditor> {
-  late ApplicationResource _application;
+  late ApplicationDetails _application;
   late final Map<String, TextEditingController> _controllers;
   late final Map<String, bool> _boolValues;
   late final Map<String, String?> _dropdownValues;
+
+  /// Values as loaded from the server; only fields that differ are saved, so
+  /// untouched (and read-only on the API side) fields are never sent.
+  final Map<String, Object?> _initialValues = {};
   bool _saving = false;
 
   @override
@@ -63,7 +67,7 @@ class _ApplicationConfigSectionEditorState
   void didUpdateWidget(covariant ApplicationConfigSectionEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.application.uuid != widget.application.uuid ||
-        oldWidget.application.rawJson != widget.application.rawJson) {
+        oldWidget.application.raw != widget.application.raw) {
       _application = widget.application;
       _seedFromApplication(_application);
     }
@@ -77,8 +81,8 @@ class _ApplicationConfigSectionEditorState
     super.dispose();
   }
 
-  void _seedFromApplication(ApplicationResource application) {
-    final raw = application.rawJson;
+  void _seedFromApplication(ApplicationDetails application) {
+    final raw = application.raw;
     final patchDefaults = ApplicationConfigSchema.patchOnlyDefaults(raw);
 
     for (final field in widget._effectiveFields) {
@@ -92,7 +96,11 @@ class _ApplicationConfigSectionEditorState
       }
 
       if (field.type == ApplicationConfigFieldType.dropdown) {
-        final value = ApplicationConfigSchema.readText(field, raw, patchDefaults);
+        final value = ApplicationConfigSchema.readText(
+          field,
+          raw,
+          patchDefaults,
+        );
         _dropdownValues[field.key] = value.isEmpty ? null : value;
         continue;
       }
@@ -102,6 +110,24 @@ class _ApplicationConfigSectionEditorState
         raw,
         patchDefaults,
       );
+    }
+
+    _initialValues
+      ..clear()
+      ..addEntries(
+        widget._effectiveFields.map((f) => MapEntry(f.key, _currentValue(f))),
+      );
+  }
+
+  /// Comparable representation of what the user currently sees for [field].
+  Object? _currentValue(ApplicationConfigFieldDefinition field) {
+    switch (field.type) {
+      case ApplicationConfigFieldType.boolean:
+        return _boolValues[field.key] ?? false;
+      case ApplicationConfigFieldType.dropdown:
+        return _dropdownValues[field.key] ?? '';
+      default:
+        return _controllers[field.key]?.text.trim() ?? '';
     }
   }
 
@@ -113,7 +139,12 @@ class _ApplicationConfigSectionEditorState
     try {
       final body = <String, dynamic>{};
 
-      for (final field in widget._effectiveFields.where((field) => field.editable)) {
+      for (final field in widget._effectiveFields.where(
+        (field) =>
+            field.editable &&
+            !field.hidden &&
+            _currentValue(field) != _initialValues[field.key],
+      )) {
         switch (field.type) {
           case ApplicationConfigFieldType.boolean:
             body[field.key] = _boolValues[field.key] ?? false;
@@ -135,11 +166,13 @@ class _ApplicationConfigSectionEditorState
         }
       }
 
+      if (body.isEmpty) {
+        AppToast.info(context, 'Nothing to save.');
+        return;
+      }
+
       final api = await CoolifyClientService.createClient();
-      final updated = await api.applications.update(
-        _application.uuid,
-        body: body,
-      );
+      final updated = await api.updateApplication(_application.uuid, body);
 
       if (!mounted) return;
       setState(() => _application = updated);
@@ -151,7 +184,7 @@ class _ApplicationConfigSectionEditorState
       AppToast.error(context, error.message, title: 'Validation failed');
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Save failed');
+      AppToast.error(context, apiErrorMessage(error), title: 'Save failed');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -194,37 +227,47 @@ class _ApplicationConfigSectionEditorState
     if (widget.groups.isNotEmpty) {
       for (var i = 0; i < widget.groups.length; i++) {
         final group = widget.groups[i];
-        final groupFields = group.fields.where((f) => allVisible.contains(f)).toList();
+        final groupFields = group.fields
+            .where((f) => allVisible.contains(f))
+            .toList();
         if (groupFields.isEmpty) continue;
 
         if (i > 0) {
-          children.add(const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(),
-          ));
+          children.add(
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Divider(),
+            ),
+          );
         }
         if (group.title != null) {
-          children.add(Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              group.title!,
-              style: ShadTheme.of(context).textTheme.h4,
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                group.title!,
+                style: ShadTheme.of(context).textTheme.h4,
+              ),
             ),
-          ));
+          );
         }
         for (final field in groupFields) {
-          children.add(Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildField(field),
-          ));
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildField(field),
+            ),
+          );
         }
       }
     } else {
       for (final field in allVisible) {
-        children.add(Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildField(field),
-        ));
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildField(field),
+          ),
+        );
       }
     }
 
@@ -269,6 +312,8 @@ class _ApplicationConfigSectionEditorState
           const SizedBox(height: 6),
           ShadSelect<String>(
             initialValue: _dropdownValues[field.key],
+            // Required by ShadSelect whenever no value is selected.
+            placeholder: const Text('Select…'),
             enabled: field.editable,
             onChanged: field.editable
                 ? (value) => setState(() => _dropdownValues[field.key] = value)

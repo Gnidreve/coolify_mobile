@@ -20,7 +20,7 @@ class CreateEnvironmentResourcePage extends StatelessWidget {
 
   final String projectUuid;
   final String projectName;
-  final ProjectEnvironment environment;
+  final Environment environment;
 
   static const _applicationTypes = <ApplicationCreateType>[
     ApplicationCreateType.privateGithubApp,
@@ -46,8 +46,8 @@ class CreateEnvironmentResourcePage extends StatelessWidget {
     final databaseContext = DatabaseContext(
       projectName: projectName,
       projectUuid: projectUuid,
-      environmentUuid: environment.uuid,
-      environmentName: environment.name,
+      environmentUuid: environment.uuid ?? '',
+      environmentName: environment.displayName,
     );
 
     final databasePage = switch (title) {
@@ -104,7 +104,12 @@ class CreateEnvironmentResourcePage extends StatelessWidget {
     return Scaffold(
       drawer: const AppSidebarDrawer(),
       appBar: AppPageHeader(
-        crumbs: ['Projects', projectName, environment.name, 'Add Resource'],
+        crumbs: [
+          'Projects',
+          projectName,
+          environment.displayName,
+          'Add Resource',
+        ],
       ),
       body: SafeArea(
         top: false,

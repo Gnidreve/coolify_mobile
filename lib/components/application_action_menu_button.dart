@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../api/coolify_api.dart';
 import '../core/services/app_toast.dart';
 import '../core/services/coolify_client_service.dart';
 
@@ -38,7 +39,7 @@ class _ApplicationActionMenuButtonState
       await widget.onActionCompleted?.call();
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Action failed');
+      AppToast.error(context, apiErrorMessage(error), title: 'Action failed');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -46,17 +47,26 @@ class _ApplicationActionMenuButtonState
 
   Future<String> _start() async {
     final api = await CoolifyClientService.createClient();
-    return api.applications.start(widget.applicationUuid);
+    final response = await api.applications.startApplicationByUuid(
+      widget.applicationUuid,
+    );
+    return response?.message ?? 'Application start request sent.';
   }
 
   Future<String> _stop() async {
     final api = await CoolifyClientService.createClient();
-    return api.applications.stop(widget.applicationUuid);
+    final response = await api.applications.stopApplicationByUuid(
+      widget.applicationUuid,
+    );
+    return response?.message ?? 'Application stop request sent.';
   }
 
   Future<String> _restart() async {
     final api = await CoolifyClientService.createClient();
-    return api.applications.restart(widget.applicationUuid);
+    final response = await api.applications.restartApplicationByUuid(
+      widget.applicationUuid,
+    );
+    return response?.message ?? 'Application restart request sent.';
   }
 
   void _openSheet() {

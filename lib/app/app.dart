@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../api/coolify_api.dart';
+import '../core/services/app_shell_service.dart';
 import '../core/services/credentials_service.dart';
 import '../core/services/preferences_service.dart';
+import '../core/services/update_service.dart';
 import '../pages/home/index.dart';
 import '../pages/login/index.dart';
+import '../pages/update/update_required_page.dart';
 import '../theme.dart';
 
 class CoolifyApp extends StatefulWidget {
@@ -41,8 +45,7 @@ class _CoolifyAppState extends State<CoolifyApp> {
       home: _SonnerShell(
         child: Builder(
           builder: (context) {
-            final isDark =
-                ShadTheme.of(context).brightness == Brightness.dark;
+            final isDark = ShadTheme.of(context).brightness == Brightness.dark;
             final bgColor = ShadTheme.of(context).colorScheme.background;
             return Theme(
               data: Theme.of(context).copyWith(
@@ -129,7 +132,14 @@ class _SonnerShellState extends State<_SonnerShell>
   }
 }
 
-enum _GateState { loading, login, healthError, home }
+enum _GateState {
+  updateCheck,
+  updateRequired,
+  loading,
+  login,
+  healthError,
+  home,
+}
 
 /// Decides whether to show the login screen or the home screen.
 /// On first open with stored credentials a health check is performed.
@@ -143,14 +153,42 @@ class _RootGate extends StatefulWidget {
 }
 
 class _RootGateState extends State<_RootGate> {
-  _GateState _state = _GateState.loading;
+  _GateState _state = _GateState.updateCheck;
+  final _updateService = UpdateService();
+  AppUpdate? _update;
+  String _currentVersion = '';
   String _healthErrorMessage =
       'The Coolify instance did not respond. Check your network or instance URL.';
 
   @override
   void initState() {
     super.initState();
-    _check();
+    _checkForUpdate();
+  }
+
+  /// Runs once at app start. A newer release blocks the app until installed;
+  /// if the check fails the app starts normally.
+  Future<void> _checkForUpdate() async {
+    final update = await _updateService.checkForUpdate();
+    if (!mounted) return;
+
+    if (update == null) {
+      await _check();
+      return;
+    }
+
+    String currentVersion = '';
+    try {
+      final info = await PackageInfo.fromPlatform();
+      currentVersion = 'v${info.version}';
+    } catch (_) {}
+    if (!mounted) return;
+
+    setState(() {
+      _update = update;
+      _currentVersion = currentVersion;
+      _state = _GateState.updateRequired;
+    });
   }
 
   Future<void> _check() async {
@@ -179,13 +217,13 @@ class _RootGateState extends State<_RootGate> {
 
     try {
       final api = CoolifyApi(baseUrl: baseUrl!, apiToken: apiToken!);
-      final isUp = await api.health.check();
+      final isUp = await api.isHealthy();
       if (!mounted) return;
       setState(() => _state = isUp ? _GateState.home : _GateState.healthError);
     } catch (error) {
       if (mounted) {
         setState(() {
-          _healthErrorMessage = error.toString();
+          _healthErrorMessage = apiErrorMessage(error);
           _state = _GateState.healthError;
         });
       }
@@ -197,6 +235,23 @@ class _RootGateState extends State<_RootGate> {
     final theme = ShadTheme.of(context);
 
     return switch (_state) {
+      _GateState.updateCheck => const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Checking for updates…'),
+            ],
+          ),
+        ),
+      ),
+      _GateState.updateRequired => UpdateRequiredPage(
+        update: _update!,
+        currentVersion: _currentVersion,
+        service: _updateService,
+      ),
       _GateState.loading => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
@@ -234,6 +289,11 @@ class _RootGateState extends State<_RootGate> {
       ),
       _GateState.home => HomePage(
         onThemeModeChanged: widget.onThemeModeChanged,
+        onLogout: () async {
+          await CredentialsService.instance.clear();
+          AppShellService.instance.setActiveItem(AppSidebarItem.dashboard);
+          await _check();
+        },
       ),
     };
   }

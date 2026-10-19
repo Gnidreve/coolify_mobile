@@ -19,7 +19,7 @@ class ServersPage extends StatefulWidget {
 class ServersPageState extends State<ServersPage> {
   bool _loading = true;
   String? _error;
-  List<ServerResource> _servers = const [];
+  List<Server> _servers = const [];
 
   @override
   void initState() {
@@ -35,15 +35,15 @@ class ServersPageState extends State<ServersPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final servers = await api.servers.list();
+      final servers = await api.servers.listServers() ?? const <Server>[];
       if (!mounted) return;
       setState(() => _servers = servers);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load servers',
       );
     } finally {
@@ -63,9 +63,9 @@ class ServersPageState extends State<ServersPage> {
   void openAdd() => _openCreate();
 
   Future<void> _openCreate() async {
-    final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const _ServerEditorPage()),
-    );
+    final changed = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const _ServerEditorPage()));
     if (changed == true) {
       _load();
     }
@@ -91,9 +91,9 @@ class ServersPageState extends State<ServersPage> {
             (server) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: ResourceCard(
-                title: server.name,
-                subtitle: server.description,
-                onTap: () => _openServer(server.uuid),
+                title: server.displayName,
+                subtitle: server.description ?? '',
+                onTap: () => _openServer(server.uuid ?? ''),
               ),
             ),
           ),
@@ -137,7 +137,7 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
   Map<String, dynamic> _initial = const {};
 
   // Private Keys section
-  List<PrivateKeyResource> _privateKeys = const [];
+  List<PrivateKey> _privateKeys = const [];
   bool _loadingKeys = false;
   String? _keysError;
 
@@ -218,56 +218,72 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
 
     try {
       final api = await CoolifyClientService.createClient();
-      final server = await api.servers.get(widget.uuid!);
+      final json = await api.getServerJson(widget.uuid!);
+      final settings = json['settings'] is Map
+          ? JsonMap.from(json['settings'] as Map)
+          : <String, dynamic>{};
+
+      String text(Object? value, [String fallback = '']) =>
+          value == null ? fallback : '$value';
+
+      final name = text(json['name']);
+      final description = text(json['description']);
+      final ip = text(json['ip']);
+      final port = text(json['port'], '22');
+      final user = text(json['user']);
+      final privateKeyUuid = text(json['private_key_uuid']);
+      final proxyType = text(json['proxy_type']);
+      final concurrentBuilds = text(settings['concurrent_builds'], '1');
+      final dynamicTimeout = text(settings['dynamic_timeout'], '30');
+      final queueLimit = text(settings['deployment_queue_limit'], '1');
+      final diskThreshold = text(
+        settings['server_disk_usage_notification_threshold'] ??
+            settings['docker_cleanup_threshold'],
+        '80',
+      );
+      final diskFrequency = text(
+        settings['server_disk_usage_check_frequency'] ??
+            settings['docker_cleanup_frequency'],
+      );
+      final isBuildServer = settings['is_build_server'] == true;
+
       _initial = {
-        'name': server.name,
-        'description': server.description,
-        'ip': server.ip,
-        'port': server.port.toString(),
-        'user': server.user,
-        'private_key_uuid': server.privateKeyUuid,
-        'proxy_type': server.proxyType,
-        'concurrent_builds': server.settings.concurrentBuilds.toString(),
-        'dynamic_timeout': server.settings.dynamicTimeout.toString(),
-        'deployment_queue_limit': server.settings.deploymentQueueLimit
-            .toString(),
-        'server_disk_usage_notification_threshold': server
-            .settings
-            .serverDiskUsageNotificationThreshold
-            .toString(),
-        'server_disk_usage_check_frequency':
-            server.settings.serverDiskUsageCheckFrequency,
-        'is_build_server': server.settings.isBuildServer,
+        'name': name,
+        'description': description,
+        'ip': ip,
+        'port': port,
+        'user': user,
+        'private_key_uuid': privateKeyUuid,
+        'proxy_type': proxyType,
+        'concurrent_builds': concurrentBuilds,
+        'dynamic_timeout': dynamicTimeout,
+        'deployment_queue_limit': queueLimit,
+        'server_disk_usage_notification_threshold': diskThreshold,
+        'server_disk_usage_check_frequency': diskFrequency,
+        'is_build_server': isBuildServer,
       };
-      _nameController.text = server.name;
-      _descriptionController.text = server.description;
-      _ipController.text = server.ip;
-      _portController.text = server.port.toString();
-      _userController.text = server.user;
-      _privateKeyUuidController.text = server.privateKeyUuid;
-      _proxyTypeController.text = server.proxyType;
-      _concurrentBuildsController.text = server.settings.concurrentBuilds
-          .toString();
-      _dynamicTimeoutController.text = server.settings.dynamicTimeout
-          .toString();
-      _deploymentQueueLimitController.text = server
-          .settings
-          .deploymentQueueLimit
-          .toString();
-      _diskThresholdController.text = server
-          .settings
-          .serverDiskUsageNotificationThreshold
-          .toString();
-      _diskCheckFrequencyController.text =
-          server.settings.serverDiskUsageCheckFrequency;
-      _isBuildServer = server.settings.isBuildServer;
+      _nameController.text = name;
+      _descriptionController.text = description;
+      _ipController.text = ip;
+      _portController.text = port;
+      _userController.text = user;
+      _privateKeyUuidController.text = privateKeyUuid;
+      _proxyTypeController.text = proxyType;
+      _concurrentBuildsController.text = concurrentBuilds;
+      _dynamicTimeoutController.text = dynamicTimeout;
+      _deploymentQueueLimitController.text = queueLimit;
+      _diskThresholdController.text = diskThreshold;
+      _diskCheckFrequencyController.text = diskFrequency;
+      _isBuildServer = isBuildServer;
     } catch (error) {
-      _error = error.toString();
+      _error = apiErrorMessage(error);
       if (mounted) {
         AppToast.error(
           context,
-          error.toString(),
-          title: widget.isEditing ? 'Could not load server' : 'Could not open form',
+          apiErrorMessage(error),
+          title: widget.isEditing
+              ? 'Could not load server'
+              : 'Could not open form',
         );
       }
     } finally {
@@ -324,9 +340,38 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
     try {
       final api = await CoolifyClientService.createClient();
       if (widget.isEditing) {
-        await api.servers.update(widget.uuid!, body: body);
+        await api.servers.updateServerByUuid(
+          widget.uuid!,
+          requestFromMap(
+            body,
+            UpdateServerByUuidRequest.fromJson,
+            (request) => request.toJson(),
+          ),
+        );
       } else {
-        await api.servers.create(body: body);
+        // Creating only accepts the connection fields; the tuning values
+        // below can be set once the server exists.
+        const createFields = {
+          'name',
+          'description',
+          'ip',
+          'port',
+          'user',
+          'private_key_uuid',
+          'is_build_server',
+          'instant_validate',
+          'proxy_type',
+        };
+        await api.servers.createServer(
+          requestFromMap(
+            {
+              for (final entry in body.entries)
+                if (createFields.contains(entry.key)) entry.key: entry.value,
+            },
+            CreateServerRequest.fromJson,
+            (request) => request.toJson(),
+          ),
+        );
       }
       if (!mounted) return;
       AppToast.success(
@@ -336,7 +381,7 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Save failed');
+      AppToast.error(context, apiErrorMessage(error), title: 'Save failed');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -364,10 +409,7 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
         maxLines: maxLines,
         trailing: infoDescription == null
             ? null
-            : _FieldInfoPopover(
-                title: label,
-                description: infoDescription,
-              ),
+            : _FieldInfoPopover(title: label, description: infoDescription),
       ),
     );
   }
@@ -380,12 +422,13 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
     });
     try {
       final api = await CoolifyClientService.createClient();
-      final keys = await api.security.keys.list();
+      final keys =
+          await api.privateKeys.listPrivateKeys() ?? const <PrivateKey>[];
       if (!mounted) return;
       setState(() => _privateKeys = keys);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _keysError = error.toString());
+      setState(() => _keysError = apiErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loadingKeys = false);
     }
@@ -406,16 +449,36 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
             maxLines: 6,
           ),
           _field('ip', 'IP', _ipController),
-          _field('port', 'Port', _portController, keyboardType: TextInputType.number),
+          _field(
+            'port',
+            'Port',
+            _portController,
+            keyboardType: TextInputType.number,
+          ),
           _field('user', 'User', _userController),
         ],
       ),
       _ServerSection.advanced => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _field('concurrent_builds', 'Concurrent Builds', _concurrentBuildsController, keyboardType: TextInputType.number),
-          _field('dynamic_timeout', 'Dynamic Timeout', _dynamicTimeoutController, keyboardType: TextInputType.number),
-          _field('deployment_queue_limit', 'Deployment Queue Limit', _deploymentQueueLimitController, keyboardType: TextInputType.number),
+          _field(
+            'concurrent_builds',
+            'Concurrent Builds',
+            _concurrentBuildsController,
+            keyboardType: TextInputType.number,
+          ),
+          _field(
+            'dynamic_timeout',
+            'Dynamic Timeout',
+            _dynamicTimeoutController,
+            keyboardType: TextInputType.number,
+          ),
+          _field(
+            'deployment_queue_limit',
+            'Deployment Queue Limit',
+            _deploymentQueueLimitController,
+            keyboardType: TextInputType.number,
+          ),
           _field(
             'server_disk_usage_notification_threshold',
             'Server disk usage notification threshold (%)',
@@ -441,9 +504,7 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
       ),
       _ServerSection.proxy => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _field('proxy_type', 'Proxy Type', _proxyTypeController),
-        ],
+        children: [_field('proxy_type', 'Proxy Type', _proxyTypeController)],
       ),
       _ServerSection.privateKey => _buildPrivateKeySection(),
     };
@@ -456,10 +517,7 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
     if (_loadingKeys) return const LoadingStateView();
 
     if (_keysError != null) {
-      return ErrorStateView(
-        message: _keysError!,
-        onRetry: _loadPrivateKeys,
-      );
+      return ErrorStateView(message: _keysError!, onRetry: _loadPrivateKeys);
     }
 
     if (_privateKeys.isEmpty) {
@@ -469,16 +527,18 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: _privateKeys.map((key) {
-        final isActive = key.uuid == activeUuid;
+        final keyUuid = key.uuid ?? '';
+        final keyName = key.name ?? '';
+        final fingerprint = key.fingerprint ?? '';
+        final isActive = keyUuid == activeUuid;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: ShadCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: () => setState(
-                () => _privateKeyUuidController.text = key.uuid,
-              ),
+              onTap: () =>
+                  setState(() => _privateKeyUuidController.text = keyUuid),
               child: Row(
                 children: [
                   Expanded(
@@ -486,15 +546,15 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          key.name.isNotEmpty ? key.name : 'Unnamed key',
+                          keyName.isNotEmpty ? keyName : 'Unnamed key',
                           style: theme.textTheme.p.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (key.fingerprint.isNotEmpty) ...[
+                        if (fingerprint.isNotEmpty) ...[
                           const SizedBox(height: 2),
                           Text(
-                            key.fingerprint,
+                            fingerprint,
                             style: theme.textTheme.muted.copyWith(
                               fontFamily: 'monospace',
                               fontSize: 11,
@@ -566,17 +626,30 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
                         }
                       },
                       options: const [
-                        ShadOption(value: _ServerSection.general, child: Text('General')),
-                        ShadOption(value: _ServerSection.advanced, child: Text('Advanced')),
-                        ShadOption(value: _ServerSection.privateKey, child: Text('Private Key')),
-                        ShadOption(value: _ServerSection.proxy, child: Text('Proxy')),
+                        ShadOption(
+                          value: _ServerSection.general,
+                          child: Text('General'),
+                        ),
+                        ShadOption(
+                          value: _ServerSection.advanced,
+                          child: Text('Advanced'),
+                        ),
+                        ShadOption(
+                          value: _ServerSection.privateKey,
+                          child: Text('Private Key'),
+                        ),
+                        ShadOption(
+                          value: _ServerSection.proxy,
+                          child: Text('Proxy'),
+                        ),
                       ],
-                      selectedOptionBuilder: (context, value) => Text(switch (value) {
-                        _ServerSection.general => 'General',
-                        _ServerSection.advanced => 'Advanced',
-                        _ServerSection.privateKey => 'Private Key',
-                        _ServerSection.proxy => 'Proxy',
-                      }),
+                      selectedOptionBuilder: (context, value) =>
+                          Text(switch (value) {
+                            _ServerSection.general => 'General',
+                            _ServerSection.advanced => 'Advanced',
+                            _ServerSection.privateKey => 'Private Key',
+                            _ServerSection.proxy => 'Proxy',
+                          }),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -603,10 +676,7 @@ class _ServerEditorPageState extends State<_ServerEditorPage> {
 }
 
 class _FieldInfoPopover extends StatefulWidget {
-  const _FieldInfoPopover({
-    required this.title,
-    required this.description,
-  });
+  const _FieldInfoPopover({required this.title, required this.description});
 
   final String title;
   final String description;
@@ -636,7 +706,10 @@ class _FieldInfoPopoverState extends State<_FieldInfoPopover> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.title, style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              widget.title,
+              style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             Text(
               widget.description,

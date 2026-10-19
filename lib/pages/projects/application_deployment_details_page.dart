@@ -28,7 +28,7 @@ class _ApplicationDeploymentDetailsPageState
   bool _loading = true;
   bool _refreshingLogs = false;
   String? _error;
-  DeploymentResource? _deployment;
+  ApplicationDeploymentQueue? _deployment;
 
   @override
   void initState() {
@@ -44,15 +44,17 @@ class _ApplicationDeploymentDetailsPageState
 
     try {
       final api = await CoolifyClientService.createClient();
-      final deployment = await api.deployments.get(widget.deploymentUuid);
+      final deployment = await api.deployments.getDeploymentByUuid(
+        widget.deploymentUuid,
+      );
       if (!mounted) return;
       setState(() => _deployment = deployment);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.toString());
+      setState(() => _error = apiErrorMessage(error));
       AppToast.error(
         context,
-        error.toString(),
+        apiErrorMessage(error),
         title: 'Could not load deployment',
       );
     } finally {
@@ -65,12 +67,18 @@ class _ApplicationDeploymentDetailsPageState
     setState(() => _refreshingLogs = true);
     try {
       final api = await CoolifyClientService.createClient();
-      final deployment = await api.deployments.get(widget.deploymentUuid);
+      final deployment = await api.deployments.getDeploymentByUuid(
+        widget.deploymentUuid,
+      );
       if (!mounted) return;
       setState(() => _deployment = deployment);
     } catch (error) {
       if (!mounted) return;
-      AppToast.error(context, error.toString(), title: 'Could not refresh logs');
+      AppToast.error(
+        context,
+        apiErrorMessage(error),
+        title: 'Could not refresh logs',
+      );
     } finally {
       if (mounted) setState(() => _refreshingLogs = false);
     }
@@ -97,33 +105,45 @@ class _ApplicationDeploymentDetailsPageState
                 children: [
                   _DeploymentField(
                     label: 'Application',
-                    value: deployment.applicationName,
+                    value: deployment.applicationName ?? '',
                   ),
-                  _DeploymentField(label: 'Server', value: deployment.serverName),
-                  _DeploymentField(label: 'Status', value: deployment.status),
-                  _DeploymentField(label: 'Commit', value: deployment.commit),
+                  _DeploymentField(
+                    label: 'Server',
+                    value: deployment.serverName ?? '',
+                  ),
+                  _DeploymentField(
+                    label: 'Status',
+                    value: deployment.status ?? '',
+                  ),
+                  _DeploymentField(
+                    label: 'Commit',
+                    value: deployment.commit ?? '',
+                  ),
                   _DeploymentField(
                     label: 'Commit Message',
-                    value: deployment.commitMessage,
+                    value: deployment.commitMessage ?? '',
                   ),
                   _DeploymentField(
                     label: 'Image Tag',
-                    value: deployment.dockerRegistryImageTag,
+                    value: deployment.dockerRegistryImageTag ?? '',
                   ),
                   _DeploymentField(
                     label: 'Current Process ID',
-                    value: deployment.currentProcessId,
+                    value: deployment.currentProcessId ?? '',
                   ),
-                  _DeploymentField(label: 'Git Type', value: deployment.gitType),
+                  _DeploymentField(
+                    label: 'Git Type',
+                    value: deployment.gitType ?? '',
+                  ),
                   _DeploymentField(
                     label: 'Flags',
                     value: [
-                      'force_rebuild=${deployment.forceRebuild}',
-                      'is_webhook=${deployment.isWebhook}',
-                      'is_api=${deployment.isApi}',
-                      'restart_only=${deployment.restartOnly}',
-                      'only_this_server=${deployment.onlyThisServer}',
-                      'rollback=${deployment.rollback}',
+                      'force_rebuild=${deployment.forceRebuild ?? false}',
+                      'is_webhook=${deployment.isWebhook ?? false}',
+                      'is_api=${deployment.isApi ?? false}',
+                      'restart_only=${deployment.restartOnly ?? false}',
+                      'only_this_server=${deployment.onlyThisServer ?? false}',
+                      'rollback=${deployment.rollback ?? false}',
                     ].join('\n'),
                   ),
                   const SizedBox(height: 20),
@@ -140,7 +160,10 @@ class _ApplicationDeploymentDetailsPageState
                           : ShadButton.ghost(
                               size: ShadButtonSize.sm,
                               onPressed: _refreshLogs,
-                              child: const Icon(LucideIcons.refreshCw, size: 16),
+                              child: const Icon(
+                                LucideIcons.refreshCw,
+                                size: 16,
+                              ),
                             ),
                     ],
                   ),
@@ -153,9 +176,9 @@ class _ApplicationDeploymentDetailsPageState
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: SelectableText(
-                      deployment.logs.isEmpty
+                      (deployment.logs ?? '').isEmpty
                           ? 'No logs available.'
-                          : deployment.logs,
+                          : (deployment.logs ?? ''),
                       style: theme.textTheme.small.copyWith(
                         fontFamily: 'monospace',
                       ),
