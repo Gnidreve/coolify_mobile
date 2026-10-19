@@ -4,7 +4,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../components/app_page_header.dart';
 import '../../components/app_sidebar_drawer.dart';
 import '../../core/services/app_shell_service.dart';
-import '../deployments/index.dart';
+import '../dashboard/index.dart';
 import '../keys_tokens/index.dart';
 import '../projects/index.dart';
 import '../servers/index.dart';
@@ -59,9 +59,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody() => switch (_active) {
-    AppSidebarItem.dashboard => const _DashboardView(),
+    AppSidebarItem.dashboard => const DashboardPage(),
     AppSidebarItem.projects => ProjectsPage(key: _projectsKey),
-    AppSidebarItem.deployments => const DeploymentsPage(),
     AppSidebarItem.servers => ServersPage(key: _serversKey),
     AppSidebarItem.keysTokens => KeysTokensPage(key: _keysTokensKey),
     AppSidebarItem.team => const TeamsPage(),
@@ -113,17 +112,6 @@ class _HomePageState extends State<HomePage> {
       ),
       drawer: const AppSidebarDrawer(),
       body: SafeArea(top: false, child: _buildBody()),
-    );
-  }
-}
-
-class _DashboardView extends StatelessWidget {
-  const _DashboardView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text('Dashboard', style: ShadTheme.of(context).textTheme.muted),
     );
   }
 }

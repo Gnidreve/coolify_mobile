@@ -11,8 +11,19 @@ class DeploymentsApi {
     return data.map(DeploymentResource.fromJson).toList();
   }
 
-  Future<List<DeploymentResource>> listForApplication(String uuid) async {
-    final data = await _client.getList('/deployments/applications/$uuid');
+  Future<List<DeploymentResource>> listForApplication(
+    String uuid, {
+    int? skip,
+    int? take,
+  }) async {
+    final query = <String, String>{
+      if (skip != null) 'skip': '$skip',
+      if (take != null) 'take': '$take',
+    };
+    final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
+    final data = await _client.getList(
+      '/deployments/applications/$uuid$suffix',
+    );
     return data.map(DeploymentResource.fromJson).toList();
   }
 

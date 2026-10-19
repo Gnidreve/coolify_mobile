@@ -19,7 +19,6 @@ extension AppSidebarGroupX on AppSidebarGroup {
 enum AppSidebarItem {
   dashboard,
   projects,
-  deployments,
   servers,
   sources,
   destinations,
@@ -36,7 +35,6 @@ extension AppSidebarItemX on AppSidebarItem {
   String get label => switch (this) {
     AppSidebarItem.dashboard => 'Dashboard',
     AppSidebarItem.projects => 'Projects',
-    AppSidebarItem.deployments => 'Deployments',
     AppSidebarItem.servers => 'Servers',
     AppSidebarItem.sources => 'Sources',
     AppSidebarItem.destinations => 'Destinations',
@@ -51,8 +49,7 @@ extension AppSidebarItemX on AppSidebarItem {
 
   AppSidebarGroup get group => switch (this) {
     AppSidebarItem.dashboard ||
-    AppSidebarItem.projects ||
-    AppSidebarItem.deployments => AppSidebarGroup.workspace,
+    AppSidebarItem.projects => AppSidebarGroup.workspace,
     AppSidebarItem.servers ||
     AppSidebarItem.sources ||
     AppSidebarItem.destinations ||
@@ -68,7 +65,6 @@ extension AppSidebarItemX on AppSidebarItem {
   IconData get icon => switch (this) {
     AppSidebarItem.dashboard => LucideIcons.house,
     AppSidebarItem.projects => LucideIcons.layoutGrid,
-    AppSidebarItem.deployments => LucideIcons.rocket,
     AppSidebarItem.servers => LucideIcons.server,
     AppSidebarItem.sources => LucideIcons.gitBranch,
     AppSidebarItem.destinations => LucideIcons.route,
