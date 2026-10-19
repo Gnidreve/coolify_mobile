@@ -41,16 +41,21 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            if [ -z "${!v}" ]; then echo "::error::Missing secret for $v"; exit 1; fi
-          done
-          echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
-          cat > android/key.properties <<EOF
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
+            cat > android/key.properties <<EOF
           storeFile=release.jks
           storePassword=$KEYSTORE_PASSWORD
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
+          else
+            # Gradle then signs with the debug key. Every runner has its own,
+            # so this build cannot update an app installed from another run.
+            msg="Signing secrets are missing: building with the debug key. Updates over an installed app will fail, reinstall instead."
+            echo "::warning::$msg"
+            echo "### :warning: $msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
           # pubspec lists .env as an asset; it is gitignored.
           touch .env
 

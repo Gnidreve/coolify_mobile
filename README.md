@@ -163,6 +163,10 @@ users must uninstall before they can update. For local release builds create
 `android/key.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; gitignored);
 without it release builds fall back to the debug key.
 
+Without the secrets the workflow still builds, signed with the debug key of the runner, and
+prints a warning. Such builds cannot update an installed app (signature mismatch), and the
+mandatory update screen then blocks the app until it is reinstalled.
+
 The first signed release must be installed manually once; builds signed with the old debug
 key cannot be updated in place.
 
